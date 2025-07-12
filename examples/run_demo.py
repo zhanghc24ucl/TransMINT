@@ -1,8 +1,9 @@
+import torch
 from numpy import zeros
-from torch import device
 
 from TransMINT.data_utils.spec import FeatureSpec, InputSpec, NamedInput
 from TransMINT.model.transformer import MINTransformer
+from TransMINT.training.loss import SharpeLoss
 
 features = [
     FeatureSpec('ticker', 'static', 'categorical', None, 35),
@@ -33,7 +34,7 @@ inputs = {k: demo_static[k] for k in demo_static.dtype.names}
 inputs.update({k: demo_temporal[k] for k in demo_temporal.dtype.names})
 
 # test GPU
-dev = device("cuda")
+dev = torch.device("cuda")
 demo_inputs = NamedInput(inputs, input_spec, batch_size=batch, time_step=timestep, device=dev)
 
 mint = MINTransformer(
@@ -43,4 +44,15 @@ mint = MINTransformer(
     output_size=1,
     dropout=0.1,
 ).to(dev)
-mint.forward(demo_inputs)
+result, verbose = mint.forward(demo_inputs)
+print(result.shape)
+
+loss1 = SharpeLoss()
+loss2 = SharpeLoss(output_steps=3, global_sharpe=False)
+loss3 = SharpeLoss(output_steps=1, cost_factor=0.1, slippage_factor=0.1, global_sharpe=True)
+loss4 = SharpeLoss(output_steps=4, cost_factor=0.1, slippage_factor=0.1, reduction="mean")
+y_true = torch.randn(batch, timestep, 1).to(dev)
+print(loss1(result, y_true))
+print(loss2(result, y_true))
+print(loss3(result, y_true))
+print(loss4(result, y_true))

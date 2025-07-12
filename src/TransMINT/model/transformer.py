@@ -2,15 +2,9 @@ from typing import Dict, Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .embedding import InputEmbedding
-from .layer import (
-    GatedAddNorm,
-    InterpretableMultiHeadAttention,
-    VariableSelectionNetwork,
-    GatedResidualNetwork,
-)
+from .layer import GatedAddNorm, GatedResidualNetwork, InterpretableMultiHeadAttention, VariableSelectionNetwork
 from ..data_utils.spec import InputSpec
 
 
