@@ -1,0 +1,76 @@
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+.Python
+env/
+venv/
+virtualenv/
+.virtualenv/
+pip-selfcheck.json
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.ipynb_checkpoints
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+/.idea_modules/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Local development settings
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.example
+.env.docker
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+
+# Build and distribution
+/dist
+/build
+/eggs
+/*.egg-info
+*.egg
+MANIFEST
+
+# Docs
+/docs/_build/
+/autoapi/
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary file folder
+tmp/
+
+# Data folder
+data/
