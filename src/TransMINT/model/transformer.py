@@ -1,5 +1,3 @@
-from typing import Dict, Tuple
-
 import torch
 import torch.nn as nn
 
@@ -23,6 +21,8 @@ class MINTransformer(nn.Module):
         self.num_heads = num_heads
         self.output_size = output_size
 
+        self.verbose = None
+
         # 1) Input embedding
         self.input_embedding = embedding = InputEmbedding(input_spec, embed_dim)
 
@@ -36,7 +36,8 @@ class MINTransformer(nn.Module):
             trainable_skip_add=trainable_skip_add,
         )
         self.vsn_observed = VariableSelectionNetwork(
-            num_vars=embedding.n_observed,
+            # FIXME:
+            num_vars=embedding.n_observed+embedding.n_time_pos,
             input_dim=d_model,
             hidden_size=d_model,
             dropout=dropout,
@@ -111,18 +112,15 @@ class MINTransformer(nn.Module):
         mask = torch.triu(torch.ones(T, T, device=device), diagonal=1).bool()
         return ~mask  # True for visible
 
-    def forward(self, inputs) -> Tuple[torch.Tensor, Dict]:
+    def forward(self, inputs) -> torch.Tensor:
         device = inputs.device
         B, T = inputs.batch_size, inputs.time_step
 
         # ---- 0. input embedding ----
-        static_embed, pos_embed, obs_embed, known_embed = self.input_embedding(inputs)
+        static_embed, pos_embed, obs_embed = self.input_embedding(inputs)
 
-        assert pos_embed is None, 'currently not supported'
-        assert known_embed is None, 'currently not supported'
-
-        print('static_shape', static_embed.shape)
-        print('observed_shape', obs_embed.shape)
+        # FIXME: we use time_pos as observed currently
+        obs_embed = torch.cat([pos_embed, obs_embed], dim=2)
 
         # ---- 1. Static variable selection ----
         static_out, static_weights = self.vsn_static(static_embed)      # [B,D]
@@ -152,9 +150,9 @@ class MINTransformer(nn.Module):
         # ---- 6. Output ----
         out = self.tanh(self.out_proj(dec))  # [B,T,output_size]
 
-        verbose = {
+        self.verbose = {
             'var_static_weights': static_weights, # [B,n_static]
             'var_observed_weights': obs_weights,  # [B,T,n_observed]
             'attn_maps': attn_maps,               # [H,B,T,T]
         }
-        return out, verbose
+        return out

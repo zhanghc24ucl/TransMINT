@@ -1,7 +1,7 @@
 import numpy as np
 
-from TransMINT.settings import cn_futs
 from TransMINT.utils import DAY, HOUR, MINUTE, mkpath
+from . import settings as cn_futs
 
 
 def convert_raw1m_to_targets(ticker, horizon=5, phase=0):

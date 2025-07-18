@@ -2,9 +2,9 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional
 
 import torch
-from torch.utils.data import DataLoader
 
-from ..data_utils.spec import InputSpec
+from ..data_utils.datamodule import NamedInputDataLoader
+from ..data_utils.spec import InputSpec, NamedInput
 
 __all__ = ["TrainerConfig", "Trainer"]
 
@@ -37,8 +37,8 @@ class Trainer:
             self,
             cfg: TrainerConfig,
             input_spec: InputSpec,
-            train_loader: DataLoader,
-            valid_loader: Optional[DataLoader] = None,
+            train_loader: NamedInputDataLoader,
+            valid_loader: Optional[NamedInputDataLoader] = None,
     ) -> None:
         self.cfg = cfg
         self.train_loader = train_loader
@@ -80,7 +80,7 @@ class Trainer:
             x, y = x.to(self.device), y.to(self.device)
             loss = self.criterion(self.model(x), y)
             total_loss += loss.item() * x.size(0)
-        return total_loss / len(self.valid_loader.dataset)
+        return total_loss / len(self.valid_loader)
 
     def fit(self) -> torch.nn.Module:
         """Run the training loop and return the model loaded with *best* weights."""
@@ -108,17 +108,17 @@ class Trainer:
         return self.model
 
     @torch.no_grad()
-    def evaluate(self, dataloader: DataLoader) -> float:
+    def evaluate(self, dataloader: NamedInputDataLoader) -> float:
         """Evaluate current model on a given dataloader, returning average loss."""
         self.model.eval()
         total_loss = 0.0
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
             total_loss += self.criterion(self.model(x), y).item() * x.size(0)
-        return total_loss / len(dataloader.dataset)
+        return total_loss / len(dataloader)
 
     @torch.no_grad()
-    def predict(self, x: torch.Tensor) -> torch.Tensor:
+    def predict(self, x: NamedInput) -> torch.Tensor:
         """Convenience wrapper that mirrors sklearn’s `predict()` semantics."""
         self.model.eval()
         return self.model(x.to(self.device)).cpu()

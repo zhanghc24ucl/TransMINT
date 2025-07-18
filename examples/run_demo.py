@@ -3,15 +3,16 @@ from numpy import zeros
 
 from TransMINT.data_utils.spec import FeatureSpec, InputSpec, NamedInput
 from TransMINT.model.transformer import MINTransformer
-from TransMINT.training.loss import SharpeLoss
+from TransMINT.model.loss import SharpeLoss
 
 features = [
     FeatureSpec('ticker', 'static', 'categorical', None, 35),
     FeatureSpec('sector', 'static', 'categorical', None, 8),
-    FeatureSpec('DoM', 'observed', 'real', 'time'),
-    FeatureSpec('MoY', 'observed', 'real', 'time'),
-    FeatureSpec('DoW', 'observed', 'real', 'time'),
-    FeatureSpec('WoY', 'observed', 'real', 'time'),
+    FeatureSpec('DoM', 'time_pos', 'real', 'time'),
+    FeatureSpec('MoY', 'time_pos', 'real', 'time'),
+    FeatureSpec('DoW', 'time_pos', 'real', 'time'),
+    FeatureSpec('WoY', 'time_pos', 'real', 'time'),
+    FeatureSpec('ret1m', 'observed', 'real', 'return', lag_size=10)
 ]
 input_spec = InputSpec(features)
 input_spec.validate()
@@ -29,6 +30,7 @@ demo_temporal = zeros((batch, timestep), dtype=[
     ('MoY', int),
     ('DoW', int),
     ('WoY', int),
+    ('ret1m[10]', float, 10),
 ])
 inputs = {k: demo_static[k] for k in demo_static.dtype.names}
 inputs.update({k: demo_temporal[k] for k in demo_temporal.dtype.names})
@@ -44,7 +46,7 @@ mint = MINTransformer(
     output_size=1,
     dropout=0.1,
 ).to(dev)
-result, verbose = mint.forward(demo_inputs)
+result = mint.forward(demo_inputs)
 print(result.shape)
 
 loss1 = SharpeLoss()
