@@ -27,6 +27,8 @@ class TrainerConfig:
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     epochs: int = 10
     grad_clip_norm: Optional[float] = None  # e.g. 1.0 for stable training
+    best_min_delta: float = 1e-4
+    early_stop_patience: int = 25
 
     # ----- Logging & misc ---------------------------------------------------
     log_interval: int = 50  # batches
@@ -79,11 +81,15 @@ class Trainer:
         for x, y in self.valid_loader:
             x, y = x.to(self.device), y.to(self.device)
             loss = self.criterion(self.model(x), y)
-            total_loss += loss.item() * x.size(0)
+            total_loss += loss.item() * x.batch_size
         return total_loss / len(self.valid_loader)
 
     def fit(self) -> torch.nn.Module:
         """Run the training loop and return the model loaded with *best* weights."""
+        patience = self.cfg.early_stop_patience
+        wait_epochs = 0
+        best_min_delta = self.cfg.best_min_delta
+
         for epoch in range(1, self.cfg.epochs + 1):
             running = 0.0
             for i, batch in enumerate(self.train_loader, 1):
@@ -96,11 +102,24 @@ class Trainer:
             if self.valid_loader is not None:
                 val_loss = self._validate()
                 print(f"Epoch {epoch} ▏Validation loss={val_loss:.4f}")
-                if val_loss < self.best_val_metric:
+                if val_loss < self.best_val_metric - best_min_delta:
+                    old_best = self.best_val_metric or torch.nan
                     self.best_val_metric = val_loss
                     self.best_state_dict = {
-                        k: v.detach().cpu().clone() for k, v in self.model.state_dict().items()
+                        k: v.detach().cpu().clone()
+                        for k, v in self.model.state_dict().items()
                     }
+                    wait_epochs = 0
+                    print(f'Update best val_loss: [{old_best:.4f} to {self.best_val_metric:.4f}]')
+                else:
+                    # check if early stop is needed
+                    wait_epochs += 1
+                    print(f'No update of val_loss: {self.best_val_metric:.4f} with {wait_epochs} epochs.')
+
+            if 0 < patience <= wait_epochs:
+                print(f"Early-Stopping triggered at epoch {epoch} "
+                      f"(best val_loss={self.best_val_metric:.4f})")
+                break
 
         # ----- Load best weights before returning -------------------------
         if self.best_state_dict is not None:

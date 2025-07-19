@@ -9,17 +9,24 @@ r = load_data('../data/mom_trans/quandl_cpd_126lbw.csv')
 
 input_spec = build_input_spec(r.ticker.cat.categories.size, 126, 21)
 
+batch_size = 64
 train_loader = create_data_loader(
     r, input_spec,
     '2017-01-01', '2020-01-01',
-    time_step=252, batch_size=64,
+    time_step=252, batch_size=batch_size,
 )
 valid_loader = create_data_loader(
     r, input_spec,
     '2020-01-01', '2021-01-01',
-    time_step=252, batch_size=64,
+    time_step=252, batch_size=batch_size,
 )
-print(len(valid_loader))
+test_loader = create_data_loader(
+    r, input_spec,
+    '2021-01-01', '2022-01-01',
+    time_step=252, batch_size=batch_size,
+)
+
+print(len(train_loader), len(valid_loader), len(test_loader))
 
 train_cfg = TrainerConfig(
     model_class=MINTransformer,
@@ -38,8 +45,10 @@ train_cfg = TrainerConfig(
     device='cuda',
     log_interval=10,
     epochs=100,
+
+    early_stop_patience=30,
 )
 
-m = Trainer(train_cfg, input_spec, train_loader)
+m = Trainer(train_cfg, input_spec, train_loader, valid_loader)
 m.fit()
-metrics = m.evaluate(valid_loader)
+print(f'out-of-sample test results: {m.evaluate(test_loader): .4f}')
