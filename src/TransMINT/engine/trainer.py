@@ -114,7 +114,7 @@ class Trainer:
         total_loss = 0.0
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
-            total_loss += self.criterion(self.model(x), y).item() * x.size(0)
+            total_loss += self.criterion(self.model(x), y).item() * x.batch_size
         return total_loss / len(dataloader)
 
     @torch.no_grad()

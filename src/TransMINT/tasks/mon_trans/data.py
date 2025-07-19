@@ -12,13 +12,26 @@ def load_data(path):
     return df
 
 
-def build_input_spec(ticker_size):
+def build_input_spec(ticker_size, lbw1, lbw2):
     return InputSpec([
         FeatureSpec('ticker',            'static',   'categorical', category_size=ticker_size),
-        FeatureSpec('day_of_week',       'time_pos', 'cyclical'),
-        FeatureSpec('day_of_month',      'time_pos', 'sequential'),
-        FeatureSpec('norm_daily_return', 'observed', 'real'),
-        FeatureSpec('macd_8_24',         'observed', 'real'),
+        # FeatureSpec('day_of_week',       'time_pos', 'cyclical'),
+        # FeatureSpec('day_of_month',      'time_pos', 'sequential'),
+        # FeatureSpec('week_of_year',      'time_pos', 'sequential'),
+        # FeatureSpec('month_of_year',     'time_pos', 'sequential'),
+        # FeatureSpec('year',              'time_pos', 'sequential'),
+        FeatureSpec('norm_daily_return',     'observed', 'real'),
+        FeatureSpec('norm_monthly_return',   'observed', 'real'),
+        FeatureSpec('norm_quarterly_return', 'observed', 'real'),
+        FeatureSpec('norm_biannual_return',  'observed', 'real'),
+        FeatureSpec('norm_annual_return',    'observed', 'real'),
+        FeatureSpec('macd_8_24',             'observed', 'real'),
+        FeatureSpec('macd_16_48',            'observed', 'real'),
+        FeatureSpec('macd_32_96',            'observed', 'real'),
+        FeatureSpec(f'cp_score_{lbw1}',       'observed', 'real'),
+        FeatureSpec(f'cp_rl_{lbw1}',          'observed', 'real'),
+        FeatureSpec(f'cp_score_{lbw2}',       'observed', 'real'),
+        FeatureSpec(f'cp_rl_{lbw2}',          'observed', 'real'),
     ])
 
 

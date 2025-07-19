@@ -65,15 +65,16 @@ class SlidingTableDataLoader(NamedInputDataLoader):
         self.time_step = time_step
         self.batch_size = batch_size
 
+        self.n_sample = max(len(self.target_returns) - self.time_step, 0) + 1
+
     def __len__(self):
-        N = len(self.target_returns) - self.time_step + 1
         B = self.batch_size
-        return (N + B - 1) // B
+        return (self.n_sample + B - 1) // B
 
     def __iter__(self) -> Iterator[Tuple[NamedInput, Tensor]]:
         B = self.batch_size
         T = self.time_step
-        N = len(self.target_returns) - self.time_step + 1  # num of samples
+        N = self.n_sample
 
         for batch_start in range(0, N, B):
             batch_stop = min(batch_start+B, N)

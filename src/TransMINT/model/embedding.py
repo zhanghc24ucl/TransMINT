@@ -60,22 +60,18 @@ class InputEmbedding(nn.Module):
         super().__init__()
         self.embed_dim = embed_dim
 
-        self.static_embeds = nn.ModuleList(
-            [FeatureEmbedding(f, embed_dim) for f in input_spec.get(feature_class='static')]
-        )
-        self.n_static = len(self.static_embeds)
+        self.embeds = nn.ModuleDict()
+        self.n_features = {}
 
-        self.time_pos_embeds = nn.ModuleList(
-            [FeatureEmbedding(f, embed_dim) for f in input_spec.get(feature_class='time_pos')]
-        )
-        self.n_time_pos = len(self.time_pos_embeds)
-
-        self.observed_embeds = nn.ModuleList(
-            [FeatureEmbedding(f, embed_dim) for f in input_spec.get(feature_class='observed')]
-        )
-        self.n_observed = len(self.observed_embeds)
+        for clz in ['static', 'time_pos', 'observed']:
+            features = input_spec.get(feature_class=clz)
+            self.n_features[clz] = len(features)
+            self.embeds[clz] = nn.ModuleList([FeatureEmbedding(f, embed_dim) for f in features])
 
     def _embed_group(self, inputs, embeds):
+        if len(embeds) == 0:
+            return None
+
         reps = []
         for emb in embeds:
             reps.append(emb(inputs[emb.name]))         # each column -> (..., d)
@@ -92,13 +88,14 @@ class InputEmbedding(nn.Module):
           o_embed: (B, T, n_observed, d)
         """
         # static: (B, n_static, d)
-        s = self._embed_group(inputs, self.static_embeds)    # (B,1,n_s,d)
-        s = s.squeeze(1)                                     # (B,n_s,d)
+        s = self._embed_group(inputs, self.embeds['static'])    # (B,1,n_s,d)
+        if s is not None:
+            s = s.squeeze(1)                                    # (B,n_s,d)
 
         # time_pos
-        p = self._embed_group(inputs, self.time_pos_embeds)  # (B,T,n_tp,d)
+        p = self._embed_group(inputs, self.embeds['time_pos'])  # (B,T,n_tp,d)
 
         # observed
-        o = self._embed_group(inputs, self.observed_embeds)  # (B,T,n_obs,d)
+        o = self._embed_group(inputs, self.embeds['observed'])  # (B,T,n_obs,d)
 
         return s, p, o

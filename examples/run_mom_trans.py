@@ -7,21 +7,24 @@ from TransMINT.tasks.mon_trans.data import build_input_spec, create_data_loader,
 
 r = load_data('../data/mom_trans/quandl_cpd_126lbw.csv')
 
-input_spec = build_input_spec(r.ticker.cat.categories.size)
+input_spec = build_input_spec(r.ticker.cat.categories.size, 126, 21)
 
 train_loader = create_data_loader(
     r, input_spec,
-    '2018-02-01', '2020-12-31',
-    time_step=16, batch_size=32
+    '2017-01-01', '2020-01-01',
+    time_step=252, batch_size=64,
 )
-
-for x, y in train_loader:
-    print(x)
+valid_loader = create_data_loader(
+    r, input_spec,
+    '2020-01-01', '2021-01-01',
+    time_step=252, batch_size=64,
+)
+print(len(valid_loader))
 
 train_cfg = TrainerConfig(
     model_class=MINTransformer,
     model_params=dict(
-        d_model=16,
+        d_model=32,
         num_heads=4,
         output_size=1,
         dropout=0.1,
@@ -32,8 +35,11 @@ train_cfg = TrainerConfig(
         lr=0.001,
     ),
     loss_class=SharpeLoss,
-    device='cpu',
+    device='cuda',
+    log_interval=10,
+    epochs=100,
 )
 
 m = Trainer(train_cfg, input_spec, train_loader)
 m.fit()
+metrics = m.evaluate(valid_loader)

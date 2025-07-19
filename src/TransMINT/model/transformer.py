@@ -28,7 +28,7 @@ class MINTransformer(nn.Module):
 
         # 2) Variable Selection Network
         self.vsn_static = VariableSelectionNetwork(
-            num_vars=embedding.n_static,
+            num_vars=embedding.n_features['static'],
             input_dim=d_model,
             hidden_size=d_model,
             dropout=dropout,
@@ -36,8 +36,7 @@ class MINTransformer(nn.Module):
             trainable_skip_add=trainable_skip_add,
         )
         self.vsn_observed = VariableSelectionNetwork(
-            # FIXME:
-            num_vars=embedding.n_observed+embedding.n_time_pos,
+            num_vars=embedding.n_features['observed'],
             input_dim=d_model,
             hidden_size=d_model,
             dropout=dropout,
@@ -117,10 +116,8 @@ class MINTransformer(nn.Module):
         B, T = inputs.batch_size, inputs.time_step
 
         # ---- 0. input embedding ----
-        static_embed, pos_embed, obs_embed = self.input_embedding(inputs)
-
-        # FIXME: we use time_pos as observed currently
-        obs_embed = torch.cat([pos_embed, obs_embed], dim=2)
+        # FIXME: currently do not process time_pos embedding
+        static_embed, time_embed, obs_embed = self.input_embedding(inputs)
 
         # ---- 1. Static variable selection ----
         static_out, static_weights = self.vsn_static(static_embed)      # [B,D]
