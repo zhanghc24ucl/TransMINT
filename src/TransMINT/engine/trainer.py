@@ -34,6 +34,15 @@ class TrainerConfig:
     log_interval: int = 50  # batches
 
 
+class ValidationSharpeLoss:
+    def __init__(self, **sharpe_loss_args):
+        from ..model.loss import SharpeLoss
+        self._loss = SharpeLoss(**sharpe_loss_args)
+
+    def __call__(self, pred, y) -> float:
+        return self._loss(pred, y).item()
+
+
 class Trainer:
     def __init__(
             self,
@@ -41,12 +50,12 @@ class Trainer:
             input_spec: InputSpec,
             train_loader: NamedInputDataLoader,
             valid_loader: Optional[NamedInputDataLoader] = None,
+            valid_loss: Callable[..., float] = None,
     ) -> None:
         self.cfg = cfg
-        self.train_loader = train_loader
-        self.valid_loader = valid_loader
-
         self.device = torch.device(cfg.device)
+
+        self.train_loader = train_loader
 
         self.model = cfg.model_class(input_spec, **cfg.model_params).to(self.device)
         self.criterion = cfg.loss_class(**cfg.loss_params).to(self.device)
@@ -54,6 +63,8 @@ class Trainer:
             self.model.parameters(), **cfg.optimizer_params
         )
 
+        self.valid_loader = valid_loader
+        self.valid_loss = valid_loss or (lambda pred, y: self.criterion(pred, y).item())
         self.best_val_metric: float = float("inf")  # lower is better (loss)
         self.best_state_dict: Optional[Dict[str, torch.Tensor]] = None
 
@@ -74,16 +85,6 @@ class Trainer:
         self.optimizer.step()
         return loss.item()
 
-    @torch.no_grad()
-    def _validate(self) -> float:
-        self.model.eval()
-        total_loss = 0.0
-        for x, y in self.valid_loader:
-            x, y = x.to(self.device), y.to(self.device)
-            loss = self.criterion(self.model(x), y)
-            total_loss += loss.item() * x.batch_size
-        return total_loss / len(self.valid_loader)
-
     def fit(self) -> torch.nn.Module:
         """Run the training loop and return the model loaded with *best* weights."""
         patience = self.cfg.early_stop_patience
@@ -100,7 +101,7 @@ class Trainer:
                     running = 0.0
 
             if self.valid_loader is not None:
-                val_loss = self._validate()
+                val_loss = self.evaluate(self.valid_loader)
                 print(f"Epoch {epoch} ▏Validation loss={val_loss:.4f}")
                 if val_loss < self.best_val_metric - best_min_delta:
                     old_best = self.best_val_metric or torch.nan
@@ -128,16 +129,28 @@ class Trainer:
 
     @torch.no_grad()
     def evaluate(self, dataloader: NamedInputDataLoader) -> float:
-        """Evaluate current model on a given dataloader, returning average loss."""
+        """Evaluate current model on a given dataloader, returning aggregated loss."""
         self.model.eval()
-        total_loss = 0.0
+        preds, ys = [], []
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
-            total_loss += self.criterion(self.model(x), y).item() * x.batch_size
-        return total_loss / len(dataloader)
+            preds.append(self.model(x))
+            ys.append(y)
+        preds = torch.cat(preds)
+        ys = torch.cat(ys)
+        return self.valid_loss(preds, ys)
 
     @torch.no_grad()
     def predict(self, x: NamedInput) -> torch.Tensor:
-        """Convenience wrapper that mirrors sklearn’s `predict()` semantics."""
         self.model.eval()
         return self.model(x.to(self.device)).cpu()
+
+    @torch.no_grad()
+    def predict_all(self, dataloader: NamedInputDataLoader) -> torch.Tensor:
+        """Convenience wrapper that mirrors sklearn’s `predict()` semantics."""
+        self.model.eval()
+        preds = torch.cat([
+            self.model(x.to(self.device)).cpu()
+            for x, _ in dataloader
+        ])
+        return preds
