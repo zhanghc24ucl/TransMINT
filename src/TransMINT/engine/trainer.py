@@ -8,6 +8,18 @@ from ..data_utils.spec import InputSpec, NamedInput
 
 __all__ = ["TrainerConfig", "Trainer"]
 
+def set_seed(seed: int):
+    from random import seed as sys_seed
+    sys_seed(seed)
+    from numpy import random as np_rand
+    np_rand.seed(seed)
+    # for torch
+    torch.manual_seed(seed)             # pytorch 的 CPU 随机数
+    torch.cuda.manual_seed(seed)        # pytorch 的 GPU 随机数
+    torch.cuda.manual_seed_all(seed)    # 多 GPU 情况
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 
 @dataclass
 class TrainerConfig:
@@ -16,11 +28,13 @@ class TrainerConfig:
     # ----- Core components --------------------------------------------------
     model_class: Callable[..., torch.nn.Module]
     loss_class: Callable[..., torch.nn.Module] = torch.nn.MSELoss
+    valid_loss_class: Callable[..., torch.nn.Module] = torch.nn.MSELoss
     optimizer_class: Callable[..., torch.optim.Optimizer] = torch.optim.Adam
 
     # ----- Component‑specific kwargs ---------------------------------------
     model_params: Dict[str, Any] = field(default_factory=dict)
     loss_params: Dict[str, Any] = field(default_factory=dict)
+    valid_loss_params: Dict[str, Any] = field(default_factory=dict)
     optimizer_params: Dict[str, Any] = field(default_factory=lambda: {"lr": 1e-3})
 
     # ----- Runtime options --------------------------------------------------
@@ -29,18 +43,10 @@ class TrainerConfig:
     grad_clip_norm: Optional[float] = None  # e.g. 1.0 for stable training
     best_min_delta: float = 1e-4
     early_stop_patience: int = 25
+    seed: int = 42
 
     # ----- Logging & misc ---------------------------------------------------
     log_interval: int = 50  # batches
-
-
-class ValidationSharpeLoss:
-    def __init__(self, **sharpe_loss_args):
-        from ..model.loss import SharpeLoss
-        self._loss = SharpeLoss(**sharpe_loss_args)
-
-    def __call__(self, pred, y) -> float:
-        return self._loss(pred, y).item()
 
 
 class Trainer:
@@ -50,7 +56,6 @@ class Trainer:
             input_spec: InputSpec,
             train_loader: NamedInputDataLoader,
             valid_loader: Optional[NamedInputDataLoader] = None,
-            valid_loss: Callable[..., float] = None,
     ) -> None:
         self.cfg = cfg
         self.device = torch.device(cfg.device)
@@ -64,7 +69,8 @@ class Trainer:
         )
 
         self.valid_loader = valid_loader
-        self.valid_loss = valid_loss or (lambda pred, y: self.criterion(pred, y).item())
+        self.valid_loss = cfg.valid_loss_class(**cfg.valid_loss_params).to(self.device)
+
         self.best_val_metric: float = float("inf")  # lower is better (loss)
         self.best_state_dict: Optional[Dict[str, torch.Tensor]] = None
 
@@ -76,7 +82,7 @@ class Trainer:
         x, y = x.to(self.device), y.to(self.device)
 
         preds = self.model(x)
-        loss = self.criterion(preds, y)
+        loss = self.criterion(preds, y.targets)
         loss.backward()
 
         if self.cfg.grad_clip_norm is not None:
@@ -87,6 +93,8 @@ class Trainer:
 
     def fit(self) -> torch.nn.Module:
         """Run the training loop and return the model loaded with *best* weights."""
+        set_seed(self.cfg.seed)
+
         patience = self.cfg.early_stop_patience
         wait_epochs = 0
         best_min_delta = self.cfg.best_min_delta
@@ -135,22 +143,12 @@ class Trainer:
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
             preds.append(self.model(x))
-            ys.append(y)
+            ys.append(y.targets)
         preds = torch.cat(preds)
         ys = torch.cat(ys)
-        return self.valid_loss(preds, ys)
+        return self.valid_loss(preds, ys).item()
 
     @torch.no_grad()
     def predict(self, x: NamedInput) -> torch.Tensor:
         self.model.eval()
         return self.model(x.to(self.device)).cpu()
-
-    @torch.no_grad()
-    def predict_all(self, dataloader: NamedInputDataLoader) -> torch.Tensor:
-        """Convenience wrapper that mirrors sklearn’s `predict()` semantics."""
-        self.model.eval()
-        preds = torch.cat([
-            self.model(x.to(self.device)).cpu()
-            for x, _ in dataloader
-        ])
-        return preds

@@ -101,3 +101,33 @@ class NamedInput:
 
     def __getitem__(self, item):
         return self._values[item]
+
+
+class TargetReturn:
+    def __init__(
+            self,
+            ticker: str,
+            targets: ndarray,
+            details,
+            device=None
+    ):
+        self.ticker = ticker
+
+        from torch import from_numpy
+        self.targets = tgt = from_numpy(targets)  # (B, T, 1)
+        self.details = details                    # (B,     )
+
+        assert len(targets) == len(self.details)
+
+        if device is None:
+            from torch import device as _d
+            device = _d('cpu')
+        self.device = device
+
+        self.batch_size = tgt.size(0)
+        self.time_step = tgt.size(1)
+
+    def to(self, device):
+        self.targets = self.targets.to(device)
+        self.device = device
+        return self

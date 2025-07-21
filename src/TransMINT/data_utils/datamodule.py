@@ -1,17 +1,35 @@
+from dataclasses import dataclass
 from typing import Dict, Iterator, Tuple
 
 from numpy import full
 from torch import Tensor, from_numpy
 
-from .spec import NamedInput
+from .spec import NamedInput, TargetReturn, InputSpec
 from ..utils import MINUTE
+
+
+@dataclass
+class DataLoaderConfig:
+    input_spec: InputSpec
+    batch_size: int = 32
+    time_step: int = 16
 
 
 class NamedInputDataLoader:
     def __len__(self):
         raise NotImplementedError()
 
-    def __iter__(self) -> Iterator[Tuple[NamedInput, Tensor]]:
+    def __iter__(self) -> Iterator[Tuple[NamedInput, TargetReturn]]:
+        raise NotImplementedError()
+
+
+class DataProvider:
+    def get_dataloader(
+            self,
+            config: DataLoaderConfig,
+            start_time,
+            stop_time,
+    ) -> NamedInputDataLoader:
         raise NotImplementedError()
 
 
@@ -22,7 +40,7 @@ class CompositeNamedInputDataLoader(NamedInputDataLoader):
     def __len__(self):
         return sum((len(dl) for dl in self.data_loaders), 0)
 
-    def __iter__(self) -> Iterator[Tuple[NamedInput, Tensor]]:
+    def __iter__(self) -> Iterator[Tuple[NamedInput, TargetReturn]]:
         for dl in self.data_loaders:
             yield from dl
 
@@ -49,41 +67,57 @@ def safe_sliding_view(arr, start: int, batch_size: int, time_step: int):
 class SlidingTableDataLoader(NamedInputDataLoader):
     def __init__(
             self,
-            input_spec,
+            config: DataLoaderConfig,
             target_returns,
             static_features: Dict[str, int],
             table_features,
-            time_step=16,
-            batch_size=32,
+            ticker: str = '',
     ):
-        self.input_spec = input_spec
+        self.config = config
+        self.input_spec = config.input_spec
+        self.ticker = ticker
+
+        # the target_returns should at least have 3 fields:
+        # * time
+        # * date
+        # * return
         self.target_returns = target_returns
 
         self.static_features = static_features
         self.table_features = table_features
 
-        self.time_step = time_step
-        self.batch_size = batch_size
+        self.time_step = config.time_step
+        self.batch_size = config.batch_size
 
-        self.n_sample = max(len(self.target_returns) - self.time_step, 0) + 1
+        assert len(self.target_returns) >= self.time_step, 'no enough data'
+        self.n_sample = len(self.target_returns) - self.time_step + 1
 
     def __len__(self):
         B = self.batch_size
         return (self.n_sample + B - 1) // B
 
-    def __iter__(self) -> Iterator[Tuple[NamedInput, Tensor]]:
+    def __iter__(self) -> Iterator[Tuple[NamedInput, TargetReturn]]:
         B = self.batch_size
         T = self.time_step
         N = self.n_sample
 
-        for batch_start in range(0, N, B):
-            batch_stop = min(batch_start+B, N)
-            actual_batch_size = min(T, batch_stop-batch_start)
+        raw_tgt_returns = self.target_returns
 
-            tgt_value = from_numpy(safe_sliding_view(
-                self.target_returns['return'],
+        for batch_start in range(0, N, B):
+            batch_stop = min(batch_start + B, N)
+            actual_batch_size = batch_stop - batch_start
+
+            tgt_value = safe_sliding_view(
+                raw_tgt_returns['return'],
                 batch_start, actual_batch_size, T
-            ))
+            )
+
+            # extract details of the last time_step
+            last_start = batch_start + T - 1
+            last_stop = last_start + actual_batch_size
+
+            details = raw_tgt_returns[last_start:last_stop][['time', 'date']]
+            tgt_value = TargetReturn(self.ticker, tgt_value, details)
 
             raw_data = {}
             for f in self.input_spec.features:
@@ -153,7 +187,7 @@ class SlidingTimeAlignedDataLoader(NamedInputDataLoader):
     def __len__(self):
         return len(self.target_returns) - self.time_step + 1
 
-    def __iter__(self) -> Iterator[Tuple[NamedInput, Tensor]]:
+    def __iter__(self) -> Iterator[Tuple[NamedInput, TargetReturn]]:
         for i in range(len(self)):
             tgt = self.target_returns[i:i+self.time_step]
             tgt_value = tgt['return']
