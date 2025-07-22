@@ -5,6 +5,7 @@ import torch
 
 from ..data_utils.datamodule import NamedInputDataLoader
 from ..data_utils.spec import InputSpec, NamedInput
+from tqdm import tqdm
 
 __all__ = ["TrainerConfig", "Trainer"]
 
@@ -60,6 +61,8 @@ class Trainer:
         self.cfg = cfg
         self.device = torch.device(cfg.device)
 
+        set_seed(cfg.seed)
+
         self.train_loader = train_loader
 
         self.model = cfg.model_class(input_spec, **cfg.model_params).to(self.device)
@@ -98,19 +101,22 @@ class Trainer:
         patience = self.cfg.early_stop_patience
         wait_epochs = 0
         best_min_delta = self.cfg.best_min_delta
-
-        for epoch in range(1, self.cfg.epochs + 1):
+        n_epochs = self.cfg.epochs
+        for epoch in range(1, n_epochs + 1):
             running = 0.0
-            for i, batch in enumerate(self.train_loader, 1):
+
+            progress_bar = tqdm(self.train_loader, desc=f"Epoch {epoch}/{n_epochs}", leave=True)
+
+            for i, batch in enumerate(progress_bar):
                 running += self._train_step(batch)
                 if i % self.cfg.log_interval == 0:
                     avg_loss = running / self.cfg.log_interval
-                    print(f"Epoch {epoch} ▏Batch {i}/{len(self.train_loader)} ▏loss={avg_loss:.4f}")
+                    progress_bar.set_postfix(loss=avg_loss)
                     running = 0.0
 
             if self.valid_loader is not None:
                 val_loss = self.evaluate(self.valid_loader)
-                print(f"Epoch {epoch} ▏Validation loss={val_loss:.4f}")
+                valid_msg = f"Epoch {epoch} ▏Validation loss={val_loss:.3f}, "
                 if val_loss < self.best_val_metric - best_min_delta:
                     old_best = self.best_val_metric or torch.nan
                     self.best_val_metric = val_loss
@@ -119,11 +125,14 @@ class Trainer:
                         for k, v in self.model.state_dict().items()
                     }
                     wait_epochs = 0
-                    print(f'Update best val_loss: [{old_best:.4f} to {self.best_val_metric:.4f}]')
+                    valid_msg += f'Updated'
                 else:
                     # check if early stop is needed
                     wait_epochs += 1
-                    print(f'No update of val_loss: {self.best_val_metric:.4f} with {wait_epochs} epochs.')
+                    _m = (f'Waiting for {wait_epochs}/{patience} epochs, '
+                          f'with best={self.best_val_metric:.3f}')
+                    valid_msg += _m
+                print(valid_msg)
 
             if 0 < patience <= wait_epochs:
                 print(f"Early-Stopping triggered at epoch {epoch} "

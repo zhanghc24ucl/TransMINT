@@ -57,7 +57,7 @@ class MomTransDataProvider(DataProvider):
         time_step = config.time_step
 
         ticker_dataloaders = []
-        for ticker in raw_data.ticker.cat.categories:
+        for j, ticker in enumerate(sorted(raw_data.ticker.cat.categories)):
             ticker_data = raw_data[raw_data.ticker == ticker]
 
             bix = ticker_data.index.searchsorted(start_time)
@@ -74,14 +74,14 @@ class MomTransDataProvider(DataProvider):
             if not ticker_data.index.is_monotonic_increasing:
                 ticker_data = ticker_data.sort_index()
 
-            dloader = self._create_ticker_data_loader(config, ticker, ticker_data)
+            dloader = self._create_ticker_data_loader(config, j, ticker, ticker_data)
             ticker_dataloaders.append(dloader)
 
         from ...data_utils.datamodule import CompositeNamedInputDataLoader
         return CompositeNamedInputDataLoader(ticker_dataloaders)
 
     @staticmethod
-    def _create_ticker_data_loader(config, ticker, ticker_data):
+    def _create_ticker_data_loader(config, ticker_ix, ticker, ticker_data):
         from ...data_utils.datamodule import SlidingTableDataLoader
 
         N = len(ticker_data)
@@ -95,7 +95,7 @@ class MomTransDataProvider(DataProvider):
         tgt_rets['date'] = ticker_data.index.to_numpy()
         tgt_rets['return'] = ticker_data.target_returns.to_numpy()
 
-        static_features = {'ticker': ticker_data.ticker.cat.codes.iloc[0]}
+        static_features = {'ticker': ticker_ix}
         table_features = {}
 
         for f in config.input_spec.features:
