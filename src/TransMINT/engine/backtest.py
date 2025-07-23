@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 from .trainer import Trainer, TrainerConfig
 from ..data_utils.datamodule import DataLoaderConfig
@@ -104,8 +104,9 @@ class DailyPerformance:
 
     @classmethod
     def concatenate(cls, perfs, expected_vol=None):
-        if len(perfs) == 1:
+        if len(perfs) == 1 and expected_vol is None:
             return perfs[0]
+
         from numpy import concatenate as cat
         dates = []
         rets = []
@@ -160,6 +161,8 @@ class BacktestRun:
             run_config.test_end,
         )
 
+        self.config = run_config
+
         self.trainer = Trainer(
             cfg=run_config.trainer_cfg,
             input_spec=run_config.data_cfg.input_spec,
@@ -205,19 +208,51 @@ class BacktestRun:
         return results
 
 
+@dataclass
+class BacktestConfig:
+    windows:     List[Tuple[Any, Any, Any, Any]]
+
+    data_cfg:    DataLoaderConfig
+    trainer_cfg: TrainerConfig
+
+    def run_configs(self):
+        for train_start, valid_start, test_start, test_end in self.windows:
+            yield BacktestRunConfig(
+                train_start=train_start,
+                valid_start=valid_start,
+                test_start=test_start,
+                test_end=test_end,
+                data_cfg=self.data_cfg,
+                trainer_cfg=self.trainer_cfg,
+            )
+
+
 class Backtest:
-    def __init__(self, run_configs, data_provider):
-        self.runs = [BacktestRun(c, data_provider) for c in run_configs]
-        self.results = {}
+    def __init__(self, config: BacktestConfig, data_provider):
+        self.config = config
+        self.runs = [BacktestRun(c, data_provider) for c in config.run_configs()]
+        self.results = None
+        self.performances = None
 
     def run(self):
+        if self.results is not None:
+            assert self.performances is not None
+            return self.results
+
         results = defaultdict(list)
+        perfs = []
         for r in self.runs:
+            print(r.config)
             result = r.run()
             for k, v in result.items():
                 results[k].append(v)
+            perfs.append(r.performance)
         self.results = results = {
             k: BacktestTickerResult.concatenate(v)
             for k, v in results.items()
         }
+        self.performances = perfs
         return results
+
+    def performance(self, expected_vol=None):
+        return DailyPerformance.concatenate(self.performances, expected_vol)

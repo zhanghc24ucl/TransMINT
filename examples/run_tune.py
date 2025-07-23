@@ -1,8 +1,8 @@
 import torch
 
 from TransMINT.data_utils.datamodule import DataLoaderConfig
-from TransMINT.engine.backtest import Backtest, BacktestConfig
 from TransMINT.engine.trainer import TrainerConfig
+from TransMINT.engine.tuner import Tuner, TunerConfig
 from TransMINT.model.loss import SharpeLoss
 from TransMINT.model.transformer import MINTransformer
 from TransMINT.tasks.mon_trans.data import MomTransDataProvider, build_input_spec, load_data
@@ -47,25 +47,30 @@ data_cfg = DataLoaderConfig(
     time_step = 252,
 )
 
-bt_cfg = BacktestConfig(
-        windows=[
-            ('2017-01-01', '2019-07-01', '2020-01-01', '2021-01-01'),
-            ('2017-01-01', '2020-07-01', '2021-01-01', '2022-01-01'),
-        ],
-        data_cfg=data_cfg,
-        trainer_cfg=trainer_cfg,
+windows = [
+    # fold 1
+    [
+        ('2017-01-01', '2019-07-01', '2020-01-01', '2020-07-01'),
+    ],
+    # fold 2
+    [
+        ('2017-01-01', '2020-01-01', '2020-07-01', '2021-01-01'),
+    ]
+]
+
+tuner_cfg = TunerConfig(
+    windows=windows,
+    data_config=data_cfg,
+    trainer_config=trainer_cfg,
+
+    batch_sizes=[32, 64, 128],
+    d_models=[16, 32, 64],
+    n_epochs=[100],
+
+    lr_range=0.001,
+    dropout_range=(0.0, 0.2),
+
+    n_trials=10,
 )
-bt = Backtest(bt_cfg, data_provider)
-bt.run()
-perf = bt.performance(expected_vol=0.15)
-
-from matplotlib import pyplot as plt
-
-cumulative_return = (1 + perf.returns).cumprod()
-plt.figure(figsize=(12, 6))
-plt.plot(perf.dates, cumulative_return)
-plt.title('Cumulative Portfolio Return')
-plt.xlabel('Date')
-plt.ylabel('Cumulative Return')
-plt.grid(True)
-plt.show()
+tuner = Tuner(tuner_cfg, data_provider)
+tuner.tune()

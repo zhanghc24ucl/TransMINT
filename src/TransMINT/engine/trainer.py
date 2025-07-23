@@ -2,24 +2,13 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional
 
 import torch
+from tqdm import tqdm
 
 from ..data_utils.datamodule import NamedInputDataLoader
 from ..data_utils.spec import InputSpec, NamedInput
-from tqdm import tqdm
+from ..utils import set_seed
 
 __all__ = ["TrainerConfig", "Trainer"]
-
-def set_seed(seed: int):
-    from random import seed as sys_seed
-    sys_seed(seed)
-    from numpy import random as np_rand
-    np_rand.seed(seed)
-    # for torch
-    torch.manual_seed(seed)             # pytorch 的 CPU 随机数
-    torch.cuda.manual_seed(seed)        # pytorch 的 GPU 随机数
-    torch.cuda.manual_seed_all(seed)    # 多 GPU 情况
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
 
 @dataclass
@@ -106,19 +95,18 @@ class Trainer:
             running = 0.0
 
             progress_bar = tqdm(self.train_loader, desc=f"Epoch {epoch}/{n_epochs}", leave=True)
-
             for i, batch in enumerate(progress_bar):
                 running += self._train_step(batch)
                 if i % self.cfg.log_interval == 0:
                     avg_loss = running / self.cfg.log_interval
                     progress_bar.set_postfix(loss=avg_loss)
                     running = 0.0
+            progress_bar.close()
 
             if self.valid_loader is not None:
                 val_loss = self.evaluate(self.valid_loader)
                 valid_msg = f"Epoch {epoch} ▏Validation loss={val_loss:.3f}, "
                 if val_loss < self.best_val_metric - best_min_delta:
-                    old_best = self.best_val_metric or torch.nan
                     self.best_val_metric = val_loss
                     self.best_state_dict = {
                         k: v.detach().cpu().clone()
