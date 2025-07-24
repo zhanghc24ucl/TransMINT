@@ -4,6 +4,7 @@ from typing import Any, List, Optional, Tuple, Union
 
 import optuna
 from optuna.samplers import TPESampler
+from optuna.trial import TrialState
 
 from .backtest import Backtest, BacktestConfig, TrainerConfig
 from ..data_utils.datamodule import DataLoaderConfig
@@ -36,6 +37,11 @@ def _suggest_float_range(trial, name, range_: FLOAT_RANGE_TYPE, **kwargs):
     if isinstance(range_, float):
         return range_
     return trial.suggest_float(name, *range_, **kwargs)
+
+
+def _finished(state: TrialState):
+    # we want to rerun failed trial, but ignore pruned one
+    return state == TrialState.COMPLETE or state == TrialState.PRUNED
 
 
 class Tuner:
@@ -101,7 +107,7 @@ class Tuner:
 
     def tune(self):
         # ---- Launch optimisation --------------------------------------------------------
-        n_finished = len([t for t in self.study.trials if t.state.is_finished()])
+        n_finished = len([r for r in self.study.trials if _finished(r)])
         n_needed = self.config.n_trials - n_finished
         if n_needed > 0:
             print(f'{n_finished} trials finished, launching {n_needed} trials...')

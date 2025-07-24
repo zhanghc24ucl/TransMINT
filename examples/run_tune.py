@@ -33,7 +33,6 @@ trainer_cfg = TrainerConfig(
     grad_clip_norm=1,
 
     device='cuda',
-    log_interval=25,
     epochs=100,
     seed=63,
 

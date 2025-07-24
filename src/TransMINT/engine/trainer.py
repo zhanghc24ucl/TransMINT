@@ -91,21 +91,28 @@ class Trainer:
         wait_epochs = 0
         best_min_delta = self.cfg.best_min_delta
         n_epochs = self.cfg.epochs
-        for epoch in range(1, n_epochs + 1):
-            running = 0.0
 
-            progress_bar = tqdm(self.train_loader, desc=f"Epoch {epoch}/{n_epochs}", leave=True)
-            for i, batch in enumerate(progress_bar):
+        from numpy import inf
+        best_train_loss = inf
+        pbar = tqdm(range(1, n_epochs + 1), desc="Epochs", leave=True)
+        for epoch in pbar:
+            running = 0.0
+            cnt = 0
+
+            progress_messages = {}
+
+            for batch in self.train_loader:
                 running += self._train_step(batch)
-                if i % self.cfg.log_interval == 0:
-                    avg_loss = running / self.cfg.log_interval
-                    progress_bar.set_postfix(loss=avg_loss)
-                    running = 0.0
-            progress_bar.close()
+                cnt += 1
+
+            train_loss = running / cnt
+            if train_loss < best_train_loss:
+                best_train_loss = train_loss
+            progress_messages['train_loss'] = f'{train_loss:.03f}/{best_train_loss:.03f}'
 
             if self.valid_loader is not None:
                 val_loss = self.evaluate(self.valid_loader)
-                valid_msg = f"Epoch {epoch} ▏Validation loss={val_loss:.3f}, "
+
                 if val_loss < self.best_val_metric - best_min_delta:
                     self.best_val_metric = val_loss
                     self.best_state_dict = {
@@ -113,19 +120,19 @@ class Trainer:
                         for k, v in self.model.state_dict().items()
                     }
                     wait_epochs = 0
-                    valid_msg += f'Updated'
+                    progress_messages['status'] = 'update_best'
                 else:
                     # check if early stop is needed
                     wait_epochs += 1
-                    _m = (f'Waiting for {wait_epochs}/{patience} epochs, '
-                          f'with best={self.best_val_metric:.3f}')
-                    valid_msg += _m
-                print(valid_msg)
+                    progress_messages['status'] = f'waiting({wait_epochs}/{patience})'
+                progress_messages['valid_loss'] = f'{val_loss:.03f}/{self.best_val_metric:.03f}'
+            pbar.set_postfix(**progress_messages)
 
             if 0 < patience <= wait_epochs:
                 print(f"Early-Stopping triggered at epoch {epoch} "
                       f"(best val_loss={self.best_val_metric:.4f})")
                 break
+        pbar.close()
 
         # ----- Load best weights before returning -------------------------
         if self.best_state_dict is not None:
