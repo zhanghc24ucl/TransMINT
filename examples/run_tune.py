@@ -33,7 +33,7 @@ trainer_cfg = TrainerConfig(
     grad_clip_norm=1,
 
     device='cuda',
-    log_interval=10,
+    log_interval=25,
     epochs=100,
     seed=63,
 
@@ -59,6 +59,8 @@ windows = [
 ]
 
 tuner_cfg = TunerConfig(
+    expr_id='demo',
+
     windows=windows,
     data_config=data_cfg,
     trainer_config=trainer_cfg,
@@ -71,6 +73,7 @@ tuner_cfg = TunerConfig(
     dropout_range=(0.0, 0.2),
 
     n_trials=10,
+    store_db='demo/tune.db',
 )
 tuner = Tuner(tuner_cfg, data_provider)
 tuner.tune()
