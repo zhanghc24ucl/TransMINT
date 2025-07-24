@@ -107,7 +107,7 @@ class Tuner:
 
     def tune(self):
         # ---- Launch optimisation --------------------------------------------------------
-        n_finished = len([r for r in self.study.trials if _finished(r)])
+        n_finished = len([r for r in self.study.trials if _finished(r.state)])
         n_needed = self.config.n_trials - n_finished
         if n_needed > 0:
             print(f'{n_finished} trials finished, launching {n_needed} trials...')
