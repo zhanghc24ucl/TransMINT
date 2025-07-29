@@ -242,7 +242,7 @@ class Backtest:
         results = defaultdict(list)
         perfs = []
         for r in self.runs:
-            print(f'Backtest: {r.config.test_start}->{r.config.test_end}')
+            # print(f'Backtest: {r.config.test_start}->{r.config.test_end}')
             result = r.run()
             for k, v in result.items():
                 results[k].append(v)

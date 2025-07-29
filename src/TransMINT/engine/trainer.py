@@ -94,21 +94,25 @@ class Trainer:
 
         from numpy import inf
         best_train_loss = inf
-        pbar = tqdm(range(1, n_epochs + 1), desc="Epochs", leave=True)
-        for epoch in pbar:
+        epoch_pbar = tqdm(range(1, n_epochs + 1), desc="Epochs", position=0, leave=True)
+        for epoch in epoch_pbar:
             running = 0.0
             cnt = 0
 
-            progress_messages = {}
-
-            for batch in self.train_loader:
+            batch_pbar = tqdm(self.train_loader, desc="Batches", position=1, leave=False)
+            for batch in batch_pbar:
                 running += self._train_step(batch)
                 cnt += 1
+
+                if cnt % 100 == 0:
+                    batch_pbar.set_postfix(train_loss=f'{running / cnt:.03f}', refresh=False)
+            batch_pbar.close()
 
             train_loss = running / cnt
             if train_loss < best_train_loss:
                 best_train_loss = train_loss
-            progress_messages['train_loss'] = f'{train_loss:.03f}/{best_train_loss:.03f}'
+
+            progress_messages = {'train_loss': f'{train_loss:.04f}/{best_train_loss:.04f}'}
 
             if self.valid_loader is not None:
                 val_loss = self.evaluate(self.valid_loader)
@@ -125,14 +129,14 @@ class Trainer:
                     # check if early stop is needed
                     wait_epochs += 1
                     progress_messages['status'] = f'waiting({wait_epochs}/{patience})'
-                progress_messages['valid_loss'] = f'{val_loss:.03f}/{self.best_val_metric:.03f}'
-            pbar.set_postfix(**progress_messages)
+                progress_messages['valid_loss'] = f'{val_loss:.04f}/{self.best_val_metric:.04f}'
+            epoch_pbar.set_postfix(**progress_messages)
 
             if 0 < patience <= wait_epochs:
                 print(f"Early-Stopping triggered at epoch {epoch} "
                       f"(best val_loss={self.best_val_metric:.4f})")
                 break
-        pbar.close()
+        epoch_pbar.close()
 
         # ----- Load best weights before returning -------------------------
         if self.best_state_dict is not None:

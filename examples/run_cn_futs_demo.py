@@ -3,14 +3,9 @@ import torch
 from TransMINT.data_utils.datamodule import DataLoaderConfig
 from TransMINT.engine.backtest import Backtest, BacktestConfig
 from TransMINT.engine.trainer import TrainerConfig
-from TransMINT.engine.tuner import Tuner, TunerConfig
 from TransMINT.model.loss import SharpeLoss
 from TransMINT.model.transformer import MINTransformer
-from TransMINT.tasks.mon_trans.data import MomTransDataProvider, build_input_spec, load_data
-
-from TransMINT.data_utils.datamodule import DataLoaderConfig
-from TransMINT.tasks.cn_futs.data import build_input_spec, load_data, CNFutDataProvider
-import numpy as np
+from TransMINT.tasks.cn_futs.data import CNFutDataProvider, build_input_spec, load_data
 
 raw_data = load_data('../data')
 
@@ -20,7 +15,7 @@ input_spec = build_input_spec()
 data_cfg = DataLoaderConfig(
     input_spec=input_spec,
     batch_size = 64,
-    time_step = 252,
+    time_step = 180,  # 15 hours
 )
 
 trainer_cfg = TrainerConfig(
@@ -56,9 +51,8 @@ trainer_cfg = TrainerConfig(
 
 bt_cfg = BacktestConfig(
         windows=[
-            ('2017-01-01', '2017-12-01', '2018-01-01', '2018-02-01'),
-            # ('2017-01-01', '2018-01-01', '2018-02-01', '2018-03-01'),
-            # ('2017-01-01', '2018-02-01', '2018-03-01', '2018-04-01'),
+            # ('2017-01-01', '2019-07-01', '2020-01-01', '2021-01-01'),
+            ('2017-01-01', '2020-07-01', '2021-01-01', '2022-01-01'),
         ],
         data_cfg=data_cfg,
         trainer_cfg=trainer_cfg,
