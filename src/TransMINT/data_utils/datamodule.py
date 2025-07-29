@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Iterator, Tuple
+from typing import Dict, Iterator, Tuple, List, Any
 
 from numpy import full
 from torch import Tensor, from_numpy
@@ -13,6 +13,7 @@ class DataLoaderConfig:
     input_spec: InputSpec
     batch_size: int = 32
     time_step: int = 16
+    offset: int = 0 * MINUTE
 
 
 class NamedInputDataLoader:
@@ -77,13 +78,19 @@ class SlidingTableDataLoader(NamedInputDataLoader):
         self.input_spec = config.input_spec
         self.ticker = ticker
 
-        # the target_returns should at least have 3 fields:
+        # The target_returns should at least have 3 fields:
         # * time
         # * date
         # * return
         self.target_returns = target_returns
 
         self.static_features = static_features
+
+        # The table_features can be:
+        # * Dict[str, ndarray]
+        # * rec_array
+        # * DataFrame
+        # All of them should be the same length as target_returns
         self.table_features = table_features
 
         self.time_step = config.time_step
@@ -140,69 +147,3 @@ class SlidingTableDataLoader(NamedInputDataLoader):
                 time_step=T,
             )
             yield fvalue, tgt_value
-
-class SlidingTimeAlignedDataLoader(NamedInputDataLoader):
-    def __init__(
-            self,
-            input_spec,
-            target_returns,
-            static_features: Dict[str, int],
-            time_features,
-            observed_features,
-            time_step=16,
-            batch_size=32,
-            offset=MINUTE,
-    ):
-        self.input_spec = input_spec
-        self.target_returns = target_returns
-
-        self.static_features = static_features
-        self.time_features = time_features
-        assert len(time_features) == len(target_returns)
-
-        self.observed_features = observed_features
-        self._obs_time = observed_features['time']
-
-        self.time_step = time_step
-        self.batch_size = batch_size
-        self.offset = offset
-
-    def _get_feature(self, feature_spec, ix):
-        from numpy import full, arange
-        if feature_spec.feature_class == 'static':
-            return full(self.time_step, self.static_features[feature_spec.name])
-        elif feature_spec.feature_class == 'time_pos':
-            return self.time_features[feature_spec.name]
-
-        if feature_spec.lag_size is None:
-            return self._obs_time[feature_spec.field][ix]
-        raw = self._obs_time[feature_spec.field]
-        # convert from 1-dim ix [15,25,35,45] with lag_size=3 to
-        # [[15, 14, 13],
-        #  [25, 24, 23],
-        #  ...
-        ix_with_lag = ix[:, None] - arange(feature_spec.lag_size)[::-1]
-        return raw[ix_with_lag]
-
-    def __len__(self):
-        return len(self.target_returns) - self.time_step + 1
-
-    def __iter__(self) -> Iterator[Tuple[NamedInput, TargetReturn]]:
-        for i in range(len(self)):
-            tgt = self.target_returns[i:i+self.time_step]
-            tgt_value = tgt['return']
-
-            tgt_time = tgt['time']
-            decision_time = tgt_time - self.offset
-            feature_ix = self._obs_time.searchsorted(decision_time)
-
-            feature_value = NamedInput(
-                raw_data={
-                    f.name: self._get_feature(f, feature_ix)
-                    for f in self.input_spec.features
-                },
-                input_spec=self.input_spec,
-                batch_size=self.batch_size,
-                time_step=self.time_step
-            )
-            yield feature_value, tgt_value

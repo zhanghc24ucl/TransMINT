@@ -23,3 +23,24 @@ def set_seed(seed: int):
     cuda.manual_seed_all(seed)    # multiple GPU
     backends.cudnn.deterministic = True
     backends.cudnn.benchmark = False
+
+
+def dateint_to_datetime(dateint):
+    from numpy import empty, datetime64
+    from datetime import datetime
+    n = len(dateint)
+    rv = empty(n, dtype='datetime64[D]')
+    for i in range(n):
+        d = dateint[i]
+        yy = d // 10000
+        mm = (d % 10000) // 100
+        dd = d % 100
+        rv[i] = datetime64(datetime(yy, mm, dd), 'D')
+    return rv
+
+
+def cov_to_corr(cov):
+    from numpy import diag, sqrt, outer
+    stds = sqrt(diag(cov))
+    std_matrix = outer(stds, stds)
+    return cov / std_matrix
