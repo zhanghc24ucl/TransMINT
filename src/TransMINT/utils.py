@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 
 def mkpath(filename):
     from os import makedirs
@@ -11,18 +13,46 @@ HOUR = 60 * MINUTE
 DAY = 24 * HOUR
 
 
+def set_deterministic_flags():
+    from torch import backends
+    backends.cudnn.deterministic = True
+    backends.cudnn.benchmark = False
+
+
 def set_seed(seed: int):
     from random import seed as sys_seed
     sys_seed(seed)
     from numpy import random as np_rand
     np_rand.seed(seed)
     # for torch
-    from torch import manual_seed, cuda, backends
+    from torch import manual_seed, cuda
     manual_seed(seed)             # pytorch CPU random seed
     cuda.manual_seed(seed)        # pytorch GPU random seed
     cuda.manual_seed_all(seed)    # multiple GPU
-    backends.cudnn.deterministic = True
-    backends.cudnn.benchmark = False
+
+
+def get_random_state() -> Dict[str, Any]:
+    from random import getstate as py_state
+    from numpy.random import get_state as np_state
+    from torch import get_rng_state as torch_state
+    from torch.cuda import get_rng_state_all as cuda_state
+    return {
+        'python_random': py_state(),
+        'numpy_random': np_state(),
+        'torch_random': torch_state(),
+        'torch_cuda_random': cuda_state()
+    }
+
+
+def set_random_state(random_state: Dict[str, Any]):
+    from random import setstate as py_state
+    from numpy.random import set_state as np_state
+    from torch import set_rng_state as torch_state
+    from torch.cuda import set_rng_state_all as cuda_state
+    py_state(random_state['python_random'])
+    np_state(random_state['numpy_random'])
+    torch_state(random_state['torch_random'])
+    cuda_state(random_state['torch_cuda_random'])
 
 
 def dateint_to_datetime(dateint):

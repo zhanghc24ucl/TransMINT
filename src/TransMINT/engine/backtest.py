@@ -2,8 +2,11 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
 
+from triton.language.semantic import store
+
 from .trainer import Trainer, TrainerConfig
 from ..data_utils.datamodule import DataLoaderConfig
+from ..utils import mkpath
 
 
 class BacktestTickerResult:
@@ -135,6 +138,7 @@ class BacktestRun:
             self,
             run_config: BacktestRunConfig,
             data_provider,
+            store_path: Optional[str] = None,
     ):
         if run_config.valid_start is None:
             self.train_dataloader = data_provider.get_dataloader(
@@ -163,21 +167,73 @@ class BacktestRun:
 
         self.config = run_config
 
-        self.trainer = Trainer(
+        self.trainer = None
+        self.results = None
+        self.performance = None
+
+        if store_path is None:
+            self.snapshot_path = None
+            self.result_path = None
+        else:
+            mkpath(f'{store_path}/')
+            self.snapshot_path = f'{store_path}/trainer.pt'
+            self.result_path = f'{store_path}/results.bin'
+            self._load_results()
+
+    def _save_snapshot(self, trainer):
+        if self.snapshot_path is not None:
+            from torch import save
+            save(trainer.snapshot, self.snapshot_path)
+
+    def _load_snapshot(self):
+        if self.snapshot_path is not None:
+            from torch import load
+            try:
+                # Here we use the unsafe `weights_only`=False, since we use custom
+                # data class Snapshot.
+                return load(self.snapshot_path, weights_only=False, map_location='cpu')
+            except FileNotFoundError:
+                return None
+        else:
+            return None
+
+    def _save_results(self):
+        if self.result_path is not None:
+            from pickle import dump
+            with open(self.result_path, 'wb') as fh:
+                dump((self.performance, self.results), fh)
+
+    def _load_results(self):
+        if self.result_path is not None:
+            from pickle import load
+            try:
+                with open(self.result_path, 'rb') as fh:
+                    self.performance, self.results = load(fh)
+            except FileNotFoundError:
+                self.results = None
+                self.performance = None
+        else:
+            self.results = None
+            self.performance = None
+
+    def run(self):
+        if self.results is not None:
+            print('Backtest has completed already.')
+            return self.results
+
+        # train
+        run_config = self.config
+        m = Trainer(
             cfg=run_config.trainer_cfg,
             input_spec=run_config.data_cfg.input_spec,
             train_loader=self.train_dataloader,
             valid_loader=self.valid_dataloader,
+            callbacks=[self._save_snapshot],
         )
-        self.results = None
-        self.performance = None
-
-    def run(self):
-        if self.results is not None:
-            return self.results
-
-        # train
-        m = self.trainer
+        snapshot = self._load_snapshot()
+        if snapshot is not None:
+            print(f'resume from snapshot with {len(snapshot.trainer_state["epochs"])} epochs')
+        m.initialize(snapshot)
         m.fit()
 
         results = defaultdict(list)
@@ -205,6 +261,7 @@ class BacktestRun:
         }
         perfs = [r.daily_performance() for r in results.values()]
         self.performance = DailyPerformance.aggregate(perfs, method='mean')
+        self._save_results()
         return results
 
 
@@ -228,9 +285,17 @@ class BacktestConfig:
 
 
 class Backtest:
-    def __init__(self, config: BacktestConfig, data_provider):
+    def __init__(self, config: BacktestConfig, data_provider, store_path=None):
         self.config = config
-        self.runs = [BacktestRun(c, data_provider) for c in config.run_configs()]
+        runs = []
+        for c in config.run_configs():
+            if store_path is not None:
+                run_store_path = f'{store_path}/{c.test_start}_{c.test_end}'
+            else:
+                run_store_path = None
+            r = BacktestRun(c, data_provider, store_path=run_store_path)
+            runs.append(r)
+        self.runs = runs
         self.results = None
         self.performances = None
 
