@@ -10,6 +10,7 @@ from TransMINT.model.loss import SharpeLoss
 from TransMINT.model.transformer import MINTransformer
 from TransMINT.model.lstm import MINLSTM
 from TransMINT.tasks.cn_futs.data import CNFutDataProvider, build_input_spec, load_data
+from TransMINT.viz.backtest import plot_performance, plot_ticker_performance
 
 raw_data = load_data('../data')
 
@@ -82,11 +83,11 @@ base_bt_cfg = BacktestConfig(
         data_cfg=data_cfg,
         trainer_cfg=trainer_cfg_lstm,
 )
-labels = ['LSTM', 'Linear', 'MINTransformer']
-models = [trainer_cfg_lstm, trainer_cfg_linear, trainer_cfg_trans]
+# labels = ['LSTM', 'Linear', 'MINTransformer']
+# models = [trainer_cfg_lstm, trainer_cfg_linear, trainer_cfg_trans]
 
-# labels = ['MINTransformer']
-# models = [trainer_cfg_trans]
+labels = ['MINTransformer']
+models = [trainer_cfg_trans]
 
 from matplotlib import pyplot as plt
 for label, model in zip(labels, models):
@@ -96,16 +97,8 @@ for label, model in zip(labels, models):
     bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250803/{label}')
     bt.run()
     perfs = bt.ticker_performance()
-
-    fig, ax0 = plt.subplots(figsize=(12, 6))
-    for k, v in perfs.items():
-        cr = (1 + v.returns).cumprod()
-        ax0.plot(v.dates, cr, label=k)
-        ax0.set_xlabel('Date')
-        ax0.set_ylabel('Cumulative Return', color='blue')
-        ax0.set_title(f'{label}')
-        ax0.grid(True)
-
-        ax0.legend(ncol=7)
+    perf = bt.performance()
+    plot_performance(perf, title=f'{label}: Sharpe = {perf.sharpe_ratio:.03f}', figsize=(14, 7))
+    plot_ticker_performance(perfs, title=label, figsize=(14, 7))
 
 plt.show()
