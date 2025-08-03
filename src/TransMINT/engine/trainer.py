@@ -220,11 +220,7 @@ class Trainer:
             trainer_state['epochs'].append(epoch_state)
             snapshot.random_state = get_random_state()
 
-            for c in self.callbacks:
-                try:
-                    c(self)
-                except Exception as xe:
-                    print(f"Exception in callback {c.__class__.__name__}: {repr(xe)}")
+            self._callback()
 
             if 0 < patience <= trainer_state['wait_epochs']:
                 print(f"Early-Stopping triggered at epoch {epoch} "
@@ -233,9 +229,18 @@ class Trainer:
         epoch_pbar.close()
 
         trainer_state['completed'] = True
+        self._callback()
+
         if snapshot.best_model is not None:
             self.model.load_state_dict(snapshot.best_model)
         return self.model
+
+    def _callback(self):
+        for c in self.callbacks:
+            try:
+                c(self)
+            except Exception as xe:
+                print(f"Exception in callback {c.__class__.__name__}: {repr(xe)}")
 
     @torch.no_grad()
     def evaluate(self, dataloader: NamedInputDataLoader) -> float:

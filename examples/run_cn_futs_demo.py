@@ -50,15 +50,16 @@ trainer_cfg = TrainerConfig(
 
 bt_cfg = BacktestConfig(
         windows=[
-            ('2017-01-01', '2017-02-01', '2017-03-01', '2017-04-01'),
-            ('2017-02-01', '2017-03-01', '2017-04-01', '2017-05-01'),
+            ('2020-01-01', '2020-12-01', '2021-01-01', '2021-02-01'),
+            ('2020-02-01', '2021-01-01', '2021-02-01', '2021-03-01'),
+            ('2020-03-01', '2021-02-01', '2021-03-01', '2021-04-01'),
         ],
         data_cfg=data_cfg,
         trainer_cfg=trainer_cfg,
 )
 bt = Backtest(bt_cfg, data_provider, store_path='/tmp/demo_cn_futs')
 bt.run()
-perf = bt.performance(expected_vol=0.15)
+perf = bt.performance()
 
 from matplotlib import pyplot as plt
 

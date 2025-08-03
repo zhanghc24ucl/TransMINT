@@ -74,3 +74,6 @@ tmp/
 
 # Data folder
 data/
+
+# Experiments
+examples/experiments/*

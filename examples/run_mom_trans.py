@@ -56,7 +56,7 @@ bt_cfg = BacktestConfig(
 )
 bt = Backtest(bt_cfg, data_provider)
 bt.run()
-perf = bt.performance(expected_vol=0.15)
+perf = bt.performance()
 
 from matplotlib import pyplot as plt
 

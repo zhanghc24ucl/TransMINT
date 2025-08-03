@@ -89,7 +89,7 @@ bcfg = BacktestConfig(
 )
 backtest = Backtest(bcfg, data_provider)
 backtest.run()
-perf = backtest.performance(expected_vol=0.15)
+perf = backtest.performance()
 
 from matplotlib import pyplot as plt
 

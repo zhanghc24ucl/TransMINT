@@ -2,8 +2,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
 
-from triton.language.semantic import store
-
 from .trainer import Trainer, TrainerConfig
 from ..data_utils.datamodule import DataLoaderConfig
 from ..utils import mkpath
@@ -20,16 +18,19 @@ class BacktestTickerResult:
 
     def daily_performance(self) -> 'DailyPerformance':
         from pandas import DataFrame
+        from numpy import abs, diff, insert
         df = DataFrame({
             'dates': self.dates,
             'captured_returns': self.captured_returns,
+            'volumes': abs(diff(insert(self.positions, 0, 0.0))),
         })
 
-        agg_df = df.groupby('dates', sort=True)['captured_returns'].sum().reset_index()
+        agg_df = df.groupby('dates', sort=True)[['captured_returns', 'volumes']].sum().reset_index()
 
         agg_dates = agg_df['dates'].to_numpy()
         agg_returns = agg_df['captured_returns'].to_numpy()
-        return DailyPerformance(agg_dates, agg_returns)
+        agg_vols = agg_df['volumes'].to_numpy()
+        return DailyPerformance(agg_dates, agg_returns, agg_vols)
 
     @classmethod
     def concatenate(cls, results):
@@ -64,10 +65,11 @@ class BacktestTickerResult:
 
 
 class DailyPerformance:
-    def __init__(self, dates, returns):
+    def __init__(self, dates, returns, volumes):
         self.dates = dates
         self.returns = returns
-        assert len(self.dates) == len(self.returns)
+        self.volumes = volumes
+        assert len(self.dates) == len(self.returns) == len(self.volumes)
 
     def __len__(self):
         return len(self.dates)
@@ -82,12 +84,10 @@ class DailyPerformance:
         from math import sqrt
         return ret.mean() / ret.std() * sqrt(252)
 
-    def rescaled_returns(self, expected_vol):
-        from math import sqrt
-        ret = self.returns
-        ann_vol = ret.std() * sqrt(252)
-        norm_ret = expected_vol * ret / ann_vol
-        return norm_ret
+    @property
+    def turnover(self):
+        from numpy import mean
+        return mean(self.volumes)
 
     @classmethod
     def aggregate(cls, perfs: List['DailyPerformance'], method='mean'):
@@ -103,22 +103,23 @@ class DailyPerformance:
         else:
             raise ValueError(f'unknown aggregation method: {method}')
         ret = agg([p.returns for p in perfs], axis=0)
-        return DailyPerformance(dates, ret)
+        vol = agg([p.volumes for p in perfs], axis=0)
+        return DailyPerformance(dates, ret, vol)
 
     @classmethod
-    def concatenate(cls, perfs, expected_vol=None):
-        if len(perfs) == 1 and expected_vol is None:
+    def concatenate(cls, perfs):
+        if len(perfs) == 1:
             return perfs[0]
 
         from numpy import concatenate as cat
         dates = []
         rets = []
+        vols = []
         for p in perfs:
             dates.append(p.dates)
-            r = p.returns if expected_vol is None else \
-                p.rescaled_returns(expected_vol)
-            rets.append(r)
-        return DailyPerformance(cat(dates), cat(rets))
+            rets.append(p.returns)
+            vols.append(p.volumes)
+        return DailyPerformance(cat(dates), cat(rets), cat(vols))
 
 
 @dataclass
@@ -264,6 +265,9 @@ class BacktestRun:
         self._save_results()
         return results
 
+    def ticker_performance(self):
+        return {k: r.daily_performance() for k, r in self.results.items()}
+
 
 @dataclass
 class BacktestConfig:
@@ -319,5 +323,8 @@ class Backtest:
         self.performances = perfs
         return results
 
-    def performance(self, expected_vol=None):
-        return DailyPerformance.concatenate(self.performances, expected_vol)
+    def performance(self):
+        return DailyPerformance.concatenate(self.performances)
+
+    def ticker_performance(self):
+        return {k: r.daily_performance() for k, r in self.results.items()}

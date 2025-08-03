@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 
+from .base import ModelBase
 from .embedding import InputEmbedding
 from .layer import GatedAddNorm, GatedResidualNetwork, InterpretableMultiHeadAttention, VariableSelectionNetwork
 from ..data_utils.spec import InputSpec
 
 
-class MINTransformer(nn.Module):
+class MINTransformer(ModelBase):
     def __init__(
             self,
             input_spec: InputSpec,
@@ -16,7 +17,7 @@ class MINTransformer(nn.Module):
             dropout: float = 0.1,
             trainable_skip_add: bool=False,
     ):
-        super().__init__()
+        super().__init__(input_spec)
         self.d_model = embed_dim = d_model
         self.num_heads = num_heads
         self.output_size = output_size
