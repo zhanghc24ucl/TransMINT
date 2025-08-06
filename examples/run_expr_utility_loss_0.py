@@ -58,7 +58,6 @@ trainer_cfg_lstm = TrainerConfig(
 trainer_cfg_linear = TrainerConfig(
     model_class=MINLinear,
     model_params=dict(
-        time_step=data_cfg.time_step,
     ),
     **base_args,
 )

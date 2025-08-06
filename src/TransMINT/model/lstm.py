@@ -28,14 +28,6 @@ class MINLSTM(ModelBase):
         self.tanh = nn.Tanh()
 
     def forward(self, inputs) -> torch.Tensor:
-        obs = []
-        for k in self.input_spec.features:
-            if k.feature_class != 'observed':
-                continue
-            obs.append(inputs[k.name].float())
-        obs = torch.cat(obs, dim=-1)  # (B, T, k)
+        obs = self._observed_features(inputs)
         dec, _ = self.lstm(obs)
         return self.tanh(self.out_proj(dec))  # (B, T, 1)
-
-    def get_l1_penalty(self):
-        return torch.linalg.vector_norm(self.out_proj.weight, ord=1)
