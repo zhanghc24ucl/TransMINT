@@ -83,11 +83,8 @@ base_bt_cfg = BacktestConfig(
         data_cfg=data_cfg,
         trainer_cfg=trainer_cfg_lstm,
 )
-# labels = ['LSTM', 'Linear', 'MINTransformer']
-# models = [trainer_cfg_lstm, trainer_cfg_linear, trainer_cfg_trans]
-
-labels = ['MINTransformer']
-models = [trainer_cfg_trans]
+labels = ['LSTM', 'Linear', 'MINTransformer']
+models = [trainer_cfg_lstm, trainer_cfg_linear, trainer_cfg_trans]
 
 from matplotlib import pyplot as plt
 for label, model in zip(labels, models):

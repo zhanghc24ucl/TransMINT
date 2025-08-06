@@ -78,6 +78,10 @@ class SharpeLoss(nn.Module):
         B, T, D = y_pred.shape
         k = self.output_steps
 
+        device, dtype = y_pred.device, y_pred.dtype
+        c1 = torch.as_tensor(self.cost_factor,      device=device, dtype=dtype)
+        c2 = torch.as_tensor(self.slippage_factor,  device=device, dtype=dtype)
+
         # ------------------- PNL & trading costs ------------------- #
         if k is None:                                   # full-sequence
             pnl = y_pred * y_true                       # (B,T,D)
@@ -88,11 +92,11 @@ class SharpeLoss(nn.Module):
             # PNL from the k + 1 weights/returns
             pnl = (y_pred[:, -k-1:, :] * y_true[:, -k-1:, :]).sum(dim=1)  # (B,D)
 
-            if self.cost_factor or self.slippage_factor:
+            if c1 or c2:
                 # k trades inside the horizon
                 vol = torch.diff(y_pred[:, -k-1:, :], dim=1)                  # (B,k,D)
-                pnl = pnl - self.cost_factor     * vol.abs().sum(dim=1)
-                pnl = pnl - self.slippage_factor * vol.pow(2).sum(dim=1)
+                pnl = pnl - c1 * vol.abs().sum(dim=1)
+                pnl = pnl - c2 * vol.square().sum(dim=1)
 
         # ---------------------- Sharpe aggregation ---------------- #
         if self.global_sharpe:
@@ -101,3 +105,65 @@ class SharpeLoss(nn.Module):
         # per-sample Sharpe → reduction
         loss_vec = self._neg_sharpe(pnl.reshape(B, -1), dim=1)
         return self._reduce(loss_vec)
+
+
+class UtilityLoss(nn.Module):
+
+    def __init__(
+        self,
+        output_steps: Optional[int] = None,
+        risk_factor: Optional[float] = None,
+        cost_factor: Optional[float] = None,
+        slippage_factor: Optional[float] = None,
+    ) -> None:
+        super().__init__()
+
+        if output_steps is None:
+            assert cost_factor is None and slippage_factor is None
+
+        self.output_steps      = output_steps
+        self.risk_factor       = risk_factor or 0.0
+        self.cost_factor       = cost_factor or 0.0
+        self.slippage_factor   = slippage_factor or 0.0
+
+        # ---------------------------- forward ------------------------------- #
+    def forward(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
+        """
+        y_pred, y_true : (B, T, D)
+        """
+        if y_pred.shape != y_true.shape:
+            raise ValueError("y_pred and y_true must have identical shapes")
+
+        B, T, D = y_pred.shape
+        k = self.output_steps
+
+        device, dtype = y_pred.device, y_pred.dtype
+        rf = torch.as_tensor(self.risk_factor,      device=device, dtype=dtype)
+        c1 = torch.as_tensor(self.cost_factor,      device=device, dtype=dtype)
+        c2 = torch.as_tensor(self.slippage_factor,  device=device, dtype=dtype)
+
+        # ------------------- PNL & trading costs ------------------- #
+        c = None
+        if k is None:  # full-sequence
+            r = y_pred * y_true  # (B,T,D)
+        else:  # horizon-k
+            if T < k + 1:
+                raise ValueError(f"T={T} must be ≥ k+1={k + 1}")
+
+            # PNL from the k + 1 weights/returns
+            r = (y_pred[:, -k - 1:, :] * y_true[:, -k - 1:, :])  # (B,k+1,D)
+
+            if c1 or c2:
+                # k trades inside the horizon
+                vol = torch.diff(y_pred[:, -k - 1:, :], dim=1)  # (B,k,D)
+                c = c1 * vol.abs() + c2 * vol.square()  # (B,k,D)
+
+        # r: (B, k+1, D) or (B, T, D)
+        # c: (B, k, D) or None
+
+        u = r.mean()
+        if rf:
+            u = u - rf * r.var(unbiased=False)
+        if c is not None:
+            u = u - c.mean()
+        return -u

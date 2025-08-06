@@ -85,6 +85,14 @@ class DailyPerformance:
         return ret.mean() / ret.std() * sqrt(252)
 
     @property
+    def annualized_return(self):
+        ret = self.returns
+        from numpy import prod
+        total_return = prod(1 + ret)
+        annual_return = total_return**(252 / len(ret)) - 1
+        return annual_return
+
+    @property
     def turnover(self):
         from numpy import mean
         return mean(self.volumes)

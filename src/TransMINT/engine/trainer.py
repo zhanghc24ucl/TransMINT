@@ -187,14 +187,14 @@ class Trainer:
                 cnt += 1
 
                 if cnt % 100 == 0:
-                    batch_pbar.set_postfix(train_loss=f'{running / cnt:.03f}', refresh=False)
+                    batch_pbar.set_postfix(train_loss=f'{running / cnt:.03e}', refresh=False)
             batch_pbar.close()
 
             epoch_state['train_loss'] = train_loss = running / cnt
             if train_loss < trainer_state['best_train_loss']:
                 trainer_state['best_train_loss'] = train_loss
 
-            progress_messages = {'train_loss': f'{train_loss:.04f}/{trainer_state['best_train_loss']:.04f}'}
+            progress_messages = {'train_loss': f'{train_loss:.03e}/{trainer_state['best_train_loss']:.03e}'}
 
             snapshot.model_state = {
                 k: v.detach().cpu().clone()
