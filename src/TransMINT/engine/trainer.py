@@ -194,7 +194,7 @@ class Trainer:
             if train_loss < trainer_state['best_train_loss']:
                 trainer_state['best_train_loss'] = train_loss
 
-            progress_messages = {'train_loss': f'{train_loss:.03e}/{trainer_state['best_train_loss']:.03e}'}
+            progress_messages = {'train_loss': f'{train_loss:.03e}/{trainer_state["best_train_loss"]:.03e}'}
 
             snapshot.model_state = {
                 k: v.detach().cpu().clone()
@@ -213,8 +213,8 @@ class Trainer:
                 else:
                     # check if early stop is needed
                     trainer_state['wait_epochs'] += 1
-                    progress_messages['status'] = f'waiting({trainer_state['wait_epochs']}/{patience})'
-                progress_messages['valid_loss'] = f'{val_loss:.04f}/{trainer_state['best_val_metric']:.04f}'
+                    progress_messages['status'] = f'waiting({trainer_state["wait_epochs"]}/{patience})'
+                progress_messages['valid_loss'] = f'{val_loss:.04f}/{trainer_state["est_val_metric"]:.04f}'
             epoch_pbar.set_postfix(**progress_messages)
 
             trainer_state['epochs'].append(epoch_state)
