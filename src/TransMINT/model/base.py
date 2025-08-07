@@ -18,7 +18,7 @@ class ModelBase(nn.Module):
         return torch.cat(obs, dim=-1)  # (B, T, k)
 
 
-class MINLinear(ModelBase):
+class MinLinear(ModelBase):
     def __init__(self, input_spec: InputSpec, output_size: int = 1):
         super().__init__(input_spec)
         n_features = input_spec.count(feature_class='observed')

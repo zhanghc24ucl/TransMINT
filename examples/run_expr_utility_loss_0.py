@@ -5,10 +5,10 @@ import torch
 from TransMINT.data_utils.datamodule import DataLoaderConfig
 from TransMINT.engine.backtest import Backtest, BacktestConfig
 from TransMINT.engine.trainer import TrainerConfig
-from TransMINT.model.base import MINLinear
+from TransMINT.model.base import MinLinear
 from TransMINT.model.loss import SharpeLoss, UtilityLoss
 from TransMINT.model.transformer import MINTransformer
-from TransMINT.model.lstm import MINLSTM
+from TransMINT.model.lstm import MinLSTM
 from TransMINT.tasks.cn_futs.data import CNFutDataProvider, build_input_spec, load_data
 from TransMINT.viz.backtest import plot_performance, plot_ticker_performance
 
@@ -46,7 +46,7 @@ data_cfg = DataLoaderConfig(
 )
 
 trainer_cfg_lstm = TrainerConfig(
-    model_class=MINLSTM,
+    model_class=MinLSTM,
     model_params=dict(
         d_model=16,
         dropout=0.2,
@@ -56,7 +56,7 @@ trainer_cfg_lstm = TrainerConfig(
 )
 
 trainer_cfg_linear = TrainerConfig(
-    model_class=MINLinear,
+    model_class=MinLinear,
     model_params=dict(
     ),
     **base_args,
