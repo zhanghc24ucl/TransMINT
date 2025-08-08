@@ -76,7 +76,7 @@ def build_1m_price(datadir):
                 print('converted', ticker, horizon, phase)
 
 
-def build_1m_tabular(ticker, datadir, *, horizon=5, phase=0, offset=0):
+def build_1m_tabular_v1(ticker, datadir, *, horizon=5, phase=0, offset=0):
     # load targets' prices
     tgts = np.load(f'{datadir}/cn_futs/targets_{horizon}_{phase}/{ticker}.npy')
 
@@ -119,14 +119,16 @@ def build_1m_tabular(ticker, datadir, *, horizon=5, phase=0, offset=0):
     tabular['norm_ret_5m'] = feature1m['normret_5m'][feature1m_ix]
     tabular['ew_vol_1m'] = feature1m['ew_vol_1m'][feature1m_ix]
 
-    fn = f'{datadir}/tabular/{ticker}.npy'
+    fn = f'{datadir}/cn_futs/tabular/v1/{ticker}.npy'
     mkpath(fn)
     np.save(fn, tabular)
     return tabular
 
 
-def build_all_1m_tabular(datadir, *, horizon=5, phase=0, offset=0):
+def build_all_1m_tabular(datadir, *, horizon=5, phase=0, offset=0, version='v1'):
+    build_func = {
+        'v1': build_1m_tabular_v1,
+    }[version]
     for ticker in cn_futs.CN_FUTS_TICKERS_FULL:
-    # for ticker in ['ZN']:
-        build_1m_tabular(ticker, datadir, horizon=horizon, phase=phase, offset=offset)
+        build_func(ticker, datadir, horizon=horizon, phase=phase, offset=offset)
         print('built tabular data: ', ticker, horizon, phase, offset)

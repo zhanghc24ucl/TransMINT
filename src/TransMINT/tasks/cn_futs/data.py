@@ -21,10 +21,10 @@ def build_input_spec():
     return InputSpec(specs)
 
 
-def load_data(data_dir):
+def load_data(data_dir, version='v1'):
     rv = {}
     for k in cn_futs.CN_FUTS_TICKERS_FULL:
-        rv[k] = np.load(f'{data_dir}/tabular/{k}.npy')
+        rv[k] = np.load(f'{data_dir}/cn_futs/tabular/{version}/{k}.npy')
     return rv
 
 
