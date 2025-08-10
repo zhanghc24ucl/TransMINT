@@ -124,11 +124,13 @@ class CNFutDataProvider(DataProvider):
         tgt_rets = np.empty(N, dtype=[
             ('time', 'datetime64[ns]'),
             ('date', 'datetime64[D]'),
-            ('return', float),
+            ('target_return', float),
+            ('norm_target_return', float),
         ])
         tgt_rets['time'] = ticker_data['time'].astype('datetime64[ns]')
         tgt_rets['date'] = ticker_data['date']
-        tgt_rets['return'] = ticker_data['target_return']
+        tgt_rets['target_return'] = ticker_data['target_return']
+        tgt_rets['norm_target_return'] = ticker_data['norm_target_return']
 
         static_features = {'ticker': ticker_ix, 'sector': sector_ix}
         table_features = {}

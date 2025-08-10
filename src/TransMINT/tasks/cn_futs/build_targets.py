@@ -41,11 +41,6 @@ def convert_raw1m_to_targets(ticker, datadir, *, horizon=5, phase=0):
     date_t0 = date_data['t0']
     assert date_t0[0] < time[0]
 
-    date_delta = np.empty(len(date_data), dtype=int)
-    date_delta[:-1] = np.diff(date_data['date'])
-    date_delta[-1] = 3  # The last day is 2022-12-30, and there are 3 holidays ahead.
-    date_delta[date_delta == 2] = 0  # tricky one to exclude all weekends.
-
     date_indices = date_t0.searchsorted(time, side='right') - 1
     for k in ['date', 'DoM', 'MoY', 'DoW', 'WoY']:
         output[k] = date_data[k][date_indices]
@@ -98,6 +93,7 @@ def build_1m_tabular(ticker, datadir, *, horizon=5, phase=0, offset=0, clip=5., 
         ('time', int),
         ('date', 'datetime64[D]'),
         ('target_return', float),
+        ('norm_target_return', float),
 
         # features
         # time
@@ -138,12 +134,16 @@ def build_1m_tabular(ticker, datadir, *, horizon=5, phase=0, offset=0, clip=5., 
     assert len(feature1m_ix) == n
     assert feature1m_ix[0] >= 300  # sufficient warm-up period
 
+    ret_sigma_1m = feature1m['ew_vol_1m']
+
+    tgt_sigma = np.sqrt(horizon) * ret_sigma_1m[feature1m_ix]
+    tabular['norm_target_return'] = np.clip(tabular['target_return'] / tgt_sigma, -5, 5)
+
     # Time features
     # uniform distributed ~ [0, 1] with mu = 0.5 and sigma = sqrt(1/12)
     tabular['norm_time_of_day'] = (tgts['NToD'][:-1] - 0.5) / np.sqrt(1/12)
 
     # Return features
-    ret_sigma_1m = feature1m['ew_vol_1m']
     norm_ret_1m = feature1m['logret_1m'] / ret_sigma_1m
     if clip:
         norm_ret_1m = np.clip(norm_ret_1m, -clip, clip)
@@ -157,13 +157,9 @@ def build_1m_tabular(ticker, datadir, *, horizon=5, phase=0, offset=0, clip=5., 
         tabular[f'norm_ret_{span}m'] = norm_ret[feature1m_ix]
 
     # Value/Volume features
-    print('value_5m', np.isnan(feature1m['value_5m']).sum(), len(feature1m))
     norm_logv = expw_standardize(np.log(np.nan_to_num(feature1m['value_5m']) + epsilon), halflife=1000, clip=clip)
     tabular['norm_log_value_5m'] = norm_logv[feature1m_ix]
 
-    print('er_5m',   np.isnan(feature1m['er_5m']).sum(), len(feature1m))
-    print('clv_30m', np.isnan(feature1m['clv_30m']).sum(), len(feature1m))
-    print('value_30m', np.isnan(feature1m['value_30m']).sum(), len(feature1m))
     mfv = np.nan_to_num(feature1m['clv_30m'] * feature1m['value_30m'])
     # for 30m feature, use longer halflife
     norm_mfv = expw_standardize(mfv, halflife=2000, clip=clip)
@@ -177,7 +173,6 @@ def build_1m_tabular(ticker, datadir, *, horizon=5, phase=0, offset=0, clip=5., 
     norm_clv = expw_standardize(np.nan_to_num(feature1m['clv_30m']), mu=0, halflife=1000, clip=clip)
     tabular['norm_clv_30m'] = norm_clv[feature1m_ix]
     # normalize volatility
-    print('volatility_1m', np.isnan(feature1m['ew_vol_1m']).sum(), len(feature1m))
     norm_ewvol = expw_standardize(np.nan_to_num(feature1m['ew_vol_1m']), halflife=1000, clip=clip)
     tabular['norm_log_ewvol_1m'] = norm_ewvol[feature1m_ix]
     norm_gkvol = expw_standardize(np.nan_to_num(feature1m['gk_vol_1m']), halflife=1000, clip=clip)

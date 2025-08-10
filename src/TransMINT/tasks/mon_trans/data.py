@@ -89,11 +89,14 @@ class MomTransDataProvider(DataProvider):
         tgt_rets = np.empty(N, dtype=[
             ('time', 'datetime64[ns]'),
             ('date', 'datetime64[D]'),
-            ('return', float),
+            ('target_return', float),
+            ('norm_target_return', float),
         ])
         tgt_rets['time'] = ticker_data.index.to_numpy()
         tgt_rets['date'] = ticker_data.index.to_numpy()
-        tgt_rets['return'] = ticker_data.target_returns.to_numpy()
+        tgt_rets['target_return'] = ticker_data.target_returns.to_numpy()
+        # FIXME: we do not have normalized target return in mom_trans data.
+        tgt_rets['norm_target_return'] = ticker_data.target_returns.to_numpy()
 
         static_features = {'ticker': ticker_ix}
         table_features = {}

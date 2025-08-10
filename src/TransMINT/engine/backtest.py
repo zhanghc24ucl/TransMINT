@@ -253,7 +253,9 @@ class BacktestRun:
             pred_position = m.predict(x)
 
             pred_position = pred_position[:, -1, 0].numpy()
-            target_return = y.targets[:, -1, 0].numpy()
+            # `y.targets` are normalized target returns, only used for training.
+            # To evaluate the real capture returns, the original target returns are needed.
+            target_return = y.details['target_return']
             capture_return = pred_position * target_return
 
             res = BacktestTickerResult(

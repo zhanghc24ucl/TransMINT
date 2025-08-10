@@ -115,7 +115,7 @@ class SlidingTableDataLoader(NamedInputDataLoader):
             actual_batch_size = batch_stop - batch_start
 
             tgt_value = safe_sliding_view(
-                raw_tgt_returns['return'],
+                raw_tgt_returns['norm_target_return'],
                 batch_start, actual_batch_size, T
             )
 
@@ -123,7 +123,7 @@ class SlidingTableDataLoader(NamedInputDataLoader):
             last_start = batch_start + T - 1
             last_stop = last_start + actual_batch_size
 
-            details = raw_tgt_returns[last_start:last_stop][['time', 'date']]
+            details = raw_tgt_returns[last_start:last_stop][['time', 'date', 'target_return']]
             tgt_value = TargetReturn(self.ticker, tgt_value, details)
 
             raw_data = {}
