@@ -6,7 +6,13 @@ from ...data_utils.datamodule import DataLoaderConfig, DataProvider, NamedInputD
 from ...data_utils.spec import FeatureSpec, InputSpec
 
 
-def build_input_spec():
+def build_input_spec(version='v1'):
+    return {
+        'v1': _build_input_spec_v1,
+        'v2': _build_input_spec_v2,
+    }[version]()
+
+def _build_input_spec_v1():
     n_tickers = len(cn_futs.CN_FUTS_TICKERS_FULL)
     n_sectors = len(set(cn_futs.CN_FUTS_SECTORS.values()))
     specs = [
@@ -17,6 +23,36 @@ def build_input_spec():
         FeatureSpec('norm_ret_5m',      'observed', 'real'),
         FeatureSpec('ew_vol_1m',        'observed', 'real'),
         FeatureSpec('norm_time_of_day', 'observed', 'real'),
+    ]
+    return InputSpec(specs)
+
+
+def _build_input_spec_v2():
+    n_tickers = len(cn_futs.CN_FUTS_TICKERS_FULL)
+    n_sectors = len(set(cn_futs.CN_FUTS_SECTORS.values()))
+    specs = [
+        FeatureSpec('ticker', 'static', 'categorical', category_size=n_tickers),
+        FeatureSpec('sector', 'static', 'categorical', category_size=n_sectors),
+
+        FeatureSpec('norm_time_of_day',    'observed', 'real'),
+        FeatureSpec('norm_ret_1m[0]',      'observed', 'real'),
+        FeatureSpec('norm_ret_1m[1]',      'observed', 'real'),
+        FeatureSpec('norm_ret_1m[2]',      'observed', 'real'),
+        FeatureSpec('norm_ret_1m[3]',      'observed', 'real'),
+        FeatureSpec('norm_ret_1m[4]',      'observed', 'real'),
+        FeatureSpec('norm_ret_5m',         'observed', 'real'),
+        FeatureSpec('norm_ret_30m',        'observed', 'real'),
+        FeatureSpec('norm_ret_240m',       'observed', 'real'),
+        FeatureSpec('norm_log_value_5m',   'observed', 'real'),
+        FeatureSpec('norm_mfv_30m',        'observed', 'real'),
+
+        FeatureSpec('norm_er_5m',          'observed', 'real'),
+        FeatureSpec('norm_clv_30m',        'observed', 'real'),
+        FeatureSpec('norm_log_ewvol_1m',   'observed', 'real'),
+        FeatureSpec('norm_log_gkvol_1m',   'observed', 'real'),
+        FeatureSpec('macd_8_24_16_1m',     'observed', 'real'),
+        FeatureSpec('macd_16_48_16_1m',    'observed', 'real'),
+        FeatureSpec('macd_32_96_16_1m',    'observed', 'real'),
     ]
     return InputSpec(specs)
 

@@ -214,7 +214,7 @@ class Trainer:
                     # check if early stop is needed
                     trainer_state['wait_epochs'] += 1
                     progress_messages['status'] = f'waiting({trainer_state["wait_epochs"]}/{patience})'
-                progress_messages['valid_loss'] = f'{val_loss:.04f}/{trainer_state["est_val_metric"]:.04f}'
+                progress_messages['valid_loss'] = f'{val_loss:.04f}/{trainer_state["best_val_metric"]:.04f}'
             epoch_pbar.set_postfix(**progress_messages)
 
             trainer_state['epochs'].append(epoch_state)

@@ -149,32 +149,8 @@ class BacktestRun:
             data_provider,
             store_path: Optional[str] = None,
     ):
-        if run_config.valid_start is None:
-            self.train_dataloader = data_provider.get_dataloader(
-                run_config.data_cfg,
-                run_config.train_start,
-                run_config.test_start,
-            )
-            self.valid_dataloader = None
-        else:
-            self.train_dataloader = data_provider.get_dataloader(
-                run_config.data_cfg,
-                run_config.train_start,
-                run_config.valid_start,
-            )
-            self.valid_dataloader = data_provider.get_dataloader(
-                run_config.data_cfg,
-                run_config.valid_start,
-                run_config.test_start,
-            )
-
-        self.test_dataloader = data_provider.get_dataloader(
-            run_config.data_cfg,
-            run_config.test_start,
-            run_config.test_end,
-        )
-
         self.config = run_config
+        self.data_provider = data_provider
 
         self.trainer = None
         self.results = None
@@ -230,13 +206,34 @@ class BacktestRun:
             print('Backtest has completed already.')
             return self.results
 
-        # train
         run_config = self.config
+        data_provider = self.data_provider
+
+        if run_config.valid_start is None:
+            train_dataloader = data_provider.get_dataloader(
+                run_config.data_cfg,
+                run_config.train_start,
+                run_config.test_start,
+            )
+            valid_dataloader = None
+        else:
+            train_dataloader = data_provider.get_dataloader(
+                run_config.data_cfg,
+                run_config.train_start,
+                run_config.valid_start,
+            )
+            valid_dataloader = data_provider.get_dataloader(
+                run_config.data_cfg,
+                run_config.valid_start,
+                run_config.test_start,
+            )
+
+        # train
         m = Trainer(
             cfg=run_config.trainer_cfg,
             input_spec=run_config.data_cfg.input_spec,
-            train_loader=self.train_dataloader,
-            valid_loader=self.valid_dataloader,
+            train_loader=train_dataloader,
+            valid_loader=valid_dataloader,
             callbacks=[self._save_snapshot],
         )
         snapshot = self._load_snapshot()
@@ -247,7 +244,12 @@ class BacktestRun:
 
         results = defaultdict(list)
 
-        for x, y in self.test_dataloader:
+        test_dataloader = data_provider.get_dataloader(
+            run_config.data_cfg,
+            run_config.test_start,
+            run_config.test_end,
+        )
+        for x, y in test_dataloader:
             pred_position = m.predict(x)
 
             pred_position = pred_position[:, -1, 0].numpy()
