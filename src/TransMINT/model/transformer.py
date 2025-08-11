@@ -109,8 +109,22 @@ class MINTransformer(ModelBase):
         self.tanh = nn.Tanh()
 
     def _causal_mask(self, T: int, device):
-        mask = torch.triu(torch.ones(T, T, device=device), diagonal=1).bool()
-        return ~mask  # True for visible
+        """
+        Build a causal attention mask of shape (T, T).
+
+        Semantics:
+          - dtype: bool
+          - True  -> masked (disallowed), will be filled with -inf in attention scores
+          - False -> allowed
+
+        For query time i and key time j, we mask j > i (future positions):
+
+            i\j    0      1      2
+            0    False   True   True
+            1    False  False   True
+            2    False  False  False
+        """
+        return torch.triu(torch.ones((T, T), dtype=torch.bool, device=device), diagonal=1)
 
     def forward(self, inputs) -> torch.Tensor:
         device = inputs.device

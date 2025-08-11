@@ -259,7 +259,7 @@ class VariableSelectionNetwork(nn.Module):
         return outputs, weights
 
 class ScaledDotProductAttention(nn.Module):
-    def __init__(self, dropout: float = 0.0, mask_bias=-1e9):
+    def __init__(self, dropout: float = 0.0, mask_bias=float('-inf')):
         super().__init__()
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
         self.softmax = nn.Softmax(dim=2)
