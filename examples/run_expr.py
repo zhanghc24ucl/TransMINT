@@ -82,12 +82,12 @@ base_bt_cfg = BacktestConfig(
         data_cfg=data_cfg,
         trainer_cfg=trainer_cfg_lstm,
 )
-labels = ['LSTM_raw', 'LSTM_fusion', 'LSTM_trans']
+labels = ['LSTM_raw']
 models = [trainer_cfg_lstm, trainer_cfg_lstm_fusion, trainer_cfg_trans]
 
 for label, model in zip(labels, models):
     bt_cfg = copy.deepcopy(base_bt_cfg)
     bt_cfg.trainer_cfg = model
 
-    bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250810_lstm_norm/{label}')
+    bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250811_newloss/{label}')
     bt.run()
