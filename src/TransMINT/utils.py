@@ -74,3 +74,18 @@ def cov_to_corr(cov):
     stds = sqrt(diag(cov))
     std_matrix = outer(stds, stds)
     return cov / std_matrix
+
+
+def merge_features(feature_data: Dict[str, Any], select=None, end_time=None):
+    if select is None:
+        select = feature_data.keys()
+    data = []
+    for v in select:
+        d = feature_data[v]
+        if end_time:
+            d = d[:d['time'].searchsorted(end_time)]
+        data.append(d)
+    if len(data) == 1:
+        return data[0]
+    from numpy import concatenate
+    return concatenate(data)
