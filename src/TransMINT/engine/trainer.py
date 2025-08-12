@@ -235,6 +235,12 @@ class Trainer:
             self.model.load_state_dict(snapshot.best_model)
         return self.model
 
+    def n_parameters(self):
+        model = self.model
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        non_trainable_params = sum(p.numel() for p in model.parameters() if not p.requires_grad)
+        return trainable_params, non_trainable_params
+
     def _callback(self):
         for c in self.callbacks:
             try:

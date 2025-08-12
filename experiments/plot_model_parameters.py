@@ -4,7 +4,7 @@ import torch
 
 from TransMINT.data_utils.datamodule import DataLoaderConfig
 from TransMINT.engine.backtest import Backtest, BacktestConfig
-from TransMINT.engine.trainer import TrainerConfig
+from TransMINT.engine.trainer import TrainerConfig, Trainer
 from TransMINT.model.base import MinLinear
 from TransMINT.model.loss import SharpeLoss, UtilityLoss
 from TransMINT.model.lstm import MinFusionLSTM, MinLSTM
@@ -67,7 +67,6 @@ trainer_cfg_linear = TrainerConfig(
     model_params=dict(),
     **base_args,
 )
-
 trainer_cfg_trans = TrainerConfig(
     model_class=MINTransformer,
     model_params=dict(
@@ -79,21 +78,11 @@ trainer_cfg_trans = TrainerConfig(
     **base_args,
 )
 
-base_bt_cfg = BacktestConfig(
-        windows=[
-            ('2017-01-01', '2019-07-01', '2020-01-01', '2020-07-01'),
-            ('2017-07-01', '2020-01-01', '2020-07-01', '2021-01-01'),
-            ('2018-01-01', '2020-07-01', '2021-01-01', '2021-07-01'),
-        ],
-        data_cfg=data_cfg,
-        trainer_cfg=trainer_cfg_lstm,
-)
-labels = ['LSTM_raw', 'MinLinear']
-models = [trainer_cfg_lstm, trainer_cfg_linear]
-
-for label, model in zip(labels, models):
-    bt_cfg = copy.deepcopy(base_bt_cfg)
-    bt_cfg.trainer_cfg = model
-
-    bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250811_newloss/{label}')
-    bt.run()
+labels = ['lstm', 'fusion_lstm', 'fusion_trans']
+for cfg, label in zip([trainer_cfg_lstm, trainer_cfg_lstm_fusion, trainer_cfg_trans], labels):
+    for d_model in [16, 32, 64, 128, 256]:
+        cfg = copy.deepcopy(cfg)
+        cfg.model_params['d_model'] = d_model
+        trainer = Trainer(cfg, input_spec, None, None)
+        trainer.initialize()
+        print(label, cfg.model_params['d_model'], trainer.n_parameters())

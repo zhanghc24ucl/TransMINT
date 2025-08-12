@@ -75,5 +75,6 @@ tmp/
 # Data folder
 data/
 
-# Experiments
+# Experiment cache
 examples/experiments/*
+experiments/vault/*

@@ -62,12 +62,12 @@ class UtilityLoss(nn.Module):
         k = self.output_steps or T
 
         device, dtype = y_pred.device, y_pred.dtype
-        rf = torch.as_tensor(self.risk_factor,      device=device, dtype=dtype)
+        rf = torch.as_tensor(self.risk_factor, device=device, dtype=dtype)
 
         pnl = y_pred[:, -k:, :] * y_true[:, -k:, :]
 
         r = pnl.reshape(-1)
         u = r.mean()
-        if rf:
+        if self.risk_factor:
             u -= rf * r.var(unbiased=False)
         return -u

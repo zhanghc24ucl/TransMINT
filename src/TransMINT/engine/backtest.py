@@ -97,6 +97,9 @@ class DailyPerformance:
         from numpy import mean
         return mean(self.volumes)
 
+    def adjust_for_costs(self, cost_rate: float) -> 'DailyPerformance':
+        return DailyPerformance(self.dates, self.returns - self.volumes * cost_rate, self.volumes)
+
     @classmethod
     def aggregate(cls, perfs: List['DailyPerformance'], method='mean'):
         if len(perfs) == 1:
