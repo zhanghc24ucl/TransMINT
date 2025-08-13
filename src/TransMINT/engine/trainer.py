@@ -203,7 +203,10 @@ class Trainer:
             snapshot.optimizer_state = copy.deepcopy(self.optimizer.state_dict())
 
             if self.valid_loader is not None:
-                epoch_state['val_loss'] = val_loss = self.evaluate(self.valid_loader)
+                eval_metrics = self.evaluate(self.valid_loader)
+                epoch_state['val_loss'] = val_loss = eval_metrics['loss']
+                epoch_state['tanh_derivative'] = eval_metrics['tanh_derivative']
+                epoch_state['tanh_margin'] = eval_metrics['tanh_margin']
 
                 if val_loss < trainer_state['best_val_metric'] - best_min_delta:
                     trainer_state['best_val_metric'] = val_loss
@@ -316,7 +319,7 @@ class Trainer:
                 print(f"Exception in callback {c.__class__.__name__}: {repr(xe)}")
 
     @torch.no_grad()
-    def evaluate(self, dataloader: NamedInputDataLoader) -> float:
+    def evaluate(self, dataloader: NamedInputDataLoader) -> Dict[str, float]:
         """Evaluate current model on a given dataloader, returning aggregated loss."""
         self.model.eval()
         preds, ys = [], []
@@ -326,7 +329,14 @@ class Trainer:
             ys.append(y.targets)
         preds = torch.cat(preds)
         ys = torch.cat(ys)
-        return self.valid_loss(preds, ys).item()
+        loss = self.valid_loss(preds, ys).item()
+        deriv = (1 - preds.square()).mean().item()
+        margin = (1 - preds.abs()).mean().item()
+        return {
+            'loss': loss,
+            'tanh_derivative': deriv,
+            'tanh_margin': margin,
+        }
 
     @torch.no_grad()
     def predict(self, x: NamedInput) -> torch.Tensor:
