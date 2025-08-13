@@ -8,7 +8,7 @@ from TransMINT.engine.trainer import TrainerConfig
 from TransMINT.model.base import MinLinear
 from TransMINT.model.loss import SharpeLoss, UtilityLoss
 from TransMINT.model.lstm import MinFusionLSTM, MinLSTM
-from TransMINT.model.transformer import MINTransformer
+from TransMINT.model.transformer import MINTransformer, FusionTransformer
 from TransMINT.tasks.cn_futs.data import CNFutDataProvider, build_input_spec, load_data
 
 version = 'v2'
@@ -78,6 +78,16 @@ trainer_cfg_trans = TrainerConfig(
     ),
     **base_args,
 )
+trainer_cfg_fusion_trans = TrainerConfig(
+    model_class=FusionTransformer,
+    model_params=dict(
+        d_model=16,
+        num_heads=4,
+        dropout=0.2,
+        trainable_skip_add=False,
+    ),
+    **base_args,
+)
 
 base_bt_cfg = BacktestConfig(
         windows=[
@@ -88,12 +98,12 @@ base_bt_cfg = BacktestConfig(
         data_cfg=data_cfg,
         trainer_cfg=trainer_cfg_lstm,
 )
-labels = ['LSTM_raw', 'MinLinear']
-models = [trainer_cfg_lstm, trainer_cfg_linear]
+labels = ['MinTrans', 'FusionTrans']
+models = [trainer_cfg_trans, trainer_cfg_fusion_trans]
 
 for label, model in zip(labels, models):
     bt_cfg = copy.deepcopy(base_bt_cfg)
     bt_cfg.trainer_cfg = model
 
-    bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250811_newloss/{label}')
+    bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250812_fix/{label}')
     bt.run()

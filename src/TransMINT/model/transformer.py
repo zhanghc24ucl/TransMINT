@@ -103,6 +103,11 @@ class MINTransformer(ModelBase):
             output_size=d_model,
             dropout=dropout,
         )
+        self.decoder_gate_addnorm = GatedAddNorm(
+            input_size=d_model,
+            dropout=dropout,
+            trainable_add=False
+        )
 
         # 6) Output
         self.out_proj = nn.Linear(d_model, output_size)
@@ -159,7 +164,149 @@ class MINTransformer(ModelBase):
         attn_out = self.attn_gate_addnorm(attn_out, enriched)
         dec = self.post_grn(attn_out)
 
+        dec = self.decoder_gate_addnorm(dec, lstm_out)
+
         # ---- 6. Output ----
+        out = self.tanh(self.out_proj(dec))  # [B,T,output_size]
+
+        self.verbose = {
+            'var_static_weights': static_weights, # [B,n_static]
+            'var_observed_weights': obs_weights,  # [B,T,n_observed]
+            'attn_maps': attn_maps,               # [H,B,T,T]
+        }
+        return out
+
+
+class FusionTransformer(ModelBase):
+    def __init__(
+            self,
+            input_spec: InputSpec,
+            d_model: int,
+            num_heads: int = 4,
+            output_size: int = 1,
+            dropout: float = 0.1,
+            trainable_skip_add: bool=False,
+    ):
+        super().__init__(input_spec)
+        self.d_model = embed_dim = d_model
+        self.num_heads = num_heads
+        self.output_size = output_size
+
+        self.verbose = None
+
+        # 1) Input embedding
+        self.input_embedding = embedding = InputEmbedding(input_spec, embed_dim)
+
+        # 2) Variable Selection Network
+        self.vsn_static = VariableSelectionNetwork(
+            num_vars=embedding.n_features['static'],
+            input_dim=d_model,
+            hidden_size=d_model,
+            dropout=dropout,
+            context_size=None,  # no context for static variables
+            trainable_skip_add=trainable_skip_add,
+        )
+        self.vsn_observed = VariableSelectionNetwork(
+            num_vars=embedding.n_features['observed'],
+            input_dim=d_model,
+            hidden_size=d_model,
+            dropout=dropout,
+            context_size=d_model,  # d_model context for observed variables
+            trainable_skip_add=trainable_skip_add,
+        )
+
+        # 3) Static context GRN
+        self.static_ctx_varsel = GatedResidualNetwork(
+            input_size=d_model,
+            hidden_size=d_model,
+            output_size=d_model,
+            dropout=dropout,
+        )
+        self.static_ctx_enrich = GatedResidualNetwork(
+            input_size=d_model,
+            hidden_size=d_model,
+            output_size=d_model,
+            dropout=dropout,
+        )
+
+        # 4) Decoder
+        self.enrich_grn = GatedResidualNetwork(
+            input_size=d_model,
+            hidden_size=d_model,
+            output_size=d_model,
+            dropout=dropout,
+            context_size=d_model,
+        )
+        self.attention = InterpretableMultiHeadAttention(d_model, num_heads, dropout)
+        self.attn_gate_addnorm = GatedAddNorm(
+            input_size=d_model,
+            dropout=dropout,
+            trainable_add=False
+        )
+        self.post_grn = GatedResidualNetwork(
+            input_size=d_model,
+            hidden_size=d_model,
+            output_size=d_model,
+            dropout=dropout,
+        )
+        self.decoder_gate_addnorm = GatedAddNorm(
+            input_size=d_model,
+            dropout=dropout,
+            trainable_add=False
+        )
+
+        # 5) Output
+        self.out_proj = nn.Linear(d_model, output_size)
+        self.tanh = nn.Tanh()
+
+    def _causal_mask(self, T: int, device):
+        """
+        Build a causal attention mask of shape (T, T).
+
+        Semantics:
+          - dtype: bool
+          - True  -> masked (disallowed), will be filled with -inf in attention scores
+          - False -> allowed
+
+        For query time i and key time j, we mask j > i (future positions):
+
+            i\j    0      1      2
+            0    False   True   True
+            1    False  False   True
+            2    False  False  False
+        """
+        return torch.triu(torch.ones((T, T), dtype=torch.bool, device=device), diagonal=1)
+
+    def forward(self, inputs) -> torch.Tensor:
+        device = inputs.device
+        B, T = inputs.batch_size, inputs.time_step
+
+        # ---- 0. input embedding ----
+        # FIXME: currently do not process time_pos embedding
+        static_embed, time_embed, obs_embed = self.input_embedding(inputs)
+
+        # ---- 1. Static variable selection ----
+        static_out, static_weights = self.vsn_static(static_embed)      # [B,D]
+
+        c_varsel = self.static_ctx_varsel(static_out)                   # [B,D]
+        c_enrich = self.static_ctx_enrich(static_out)                   # [B,D]
+
+        # ---- 2. Temporal variable selection ----
+        obs_out, obs_weights = self.vsn_observed(obs_embed, c_varsel)
+
+        # ---- 3. Static enrichment ----
+        c_enrich = c_enrich.unsqueeze(1)    # [B,D]->[B,1,D]
+        enriched = self.enrich_grn(obs_out, c_enrich)
+
+        # ---- 4. Decoder self-attention ----
+        mask = self._causal_mask(T, device).unsqueeze(0).expand(B, -1, -1)
+        attn_out, attn_maps = self.attention(enriched, enriched, enriched, mask)
+        attn_out = self.attn_gate_addnorm(attn_out, enriched)
+        dec = self.post_grn(attn_out)
+
+        dec = self.decoder_gate_addnorm(dec, obs_out)
+
+        # ---- 5. Output ----
         out = self.tanh(self.out_proj(dec))  # [B,T,output_size]
 
         self.verbose = {

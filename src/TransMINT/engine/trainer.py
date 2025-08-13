@@ -241,6 +241,73 @@ class Trainer:
         non_trainable_params = sum(p.numel() for p in model.parameters() if not p.requires_grad)
         return trainable_params, non_trainable_params
 
+    def lr_range_test(
+            self,
+            lr_start=1e-6, lr_end=1e-2,
+            num_steps=3000, min_steps=0.1, smooth_beta=0.95, rel_worse=0.5,
+            dataloader=None,
+    ):
+        from numpy import isfinite
+        model, optimizer = self.model, self.optimizer
+        device = self.device
+
+        min_steps = int(min_steps * num_steps)
+        init_state = {k: v.detach().clone() for k, v in self.model.state_dict().items()}
+        init_opt = optimizer.state_dict()
+
+        lr = lr_start
+        mult = (lr_end / lr_start) ** (1 / max(1, num_steps))
+        for pg in optimizer.param_groups:
+            pg["lr"] = lr
+
+        lrs, losses = [], []
+        avg_loss, best = 0.0, float("inf")
+        step = 0
+
+        dataloader = dataloader or self.train_loader
+        for batch in dataloader:
+            if step >= num_steps:
+                break
+
+            model.train()
+            optimizer.zero_grad(set_to_none=True)
+
+            x, y = batch
+            x, y = x.to(device), y.to(device)
+
+            pred = model(x)
+            loss = self.criterion(pred, y.targets)
+
+            check_y = (1 - pred.detach().reshape(-1).square()).mean().item()
+            print(check_y)
+
+            step += 1
+            avg_loss = smooth_beta * avg_loss + (1 - smooth_beta) * loss.item()
+            smoothed = avg_loss / (1 - smooth_beta ** step)
+
+            if not isfinite(smoothed):
+                break
+
+            lrs.append(lr)
+            losses.append(smoothed)
+            if smoothed < best:
+                best = smoothed
+            rw = (smoothed - best) / (abs(best) + 1e-8)
+            if rw > rel_worse and step > min_steps:
+                print('break', rw, rel_worse, smoothed, best)
+                break
+
+            loss.backward()
+            optimizer.step()
+
+            lr *= mult
+            for pg in optimizer.param_groups:
+                pg["lr"] = lr
+
+        model.load_state_dict(init_state)
+        optimizer.load_state_dict(init_opt)
+        return lrs, losses
+
     def _callback(self):
         for c in self.callbacks:
             try:

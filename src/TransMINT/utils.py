@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 def mkpath(filename):
@@ -89,3 +89,15 @@ def merge_features(feature_data: Dict[str, Any], select=None, end_time=None):
         return data[0]
     from numpy import concatenate
     return concatenate(data)
+
+
+def find_all(base_dirs, file_name) -> List[str]:
+    paths = []
+    from pathlib import Path
+    for d in base_dirs:
+        dir_path = Path(d)
+        if dir_path.is_dir():
+            for file_path in dir_path.rglob(file_name):
+                if file_path.is_file():
+                    paths.append(str(file_path.resolve()))
+    return sorted(paths)
