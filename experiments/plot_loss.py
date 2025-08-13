@@ -10,17 +10,25 @@ base_dirs = [
     # 'vault/20250811_loss_sharpe/s42_l0.001_oNone',
     # 'vault/20250811_loss_sharpe/s63_l0.001_oNone',
     # 'vault/20250811_loss_sharpe/s191_l0.001_oNone',
+
     # 'vault/20250811_loss_utility/s63_l0.0001_oNone',
     # 'vault/20250811_loss_utility/s42_l0.0001_oNone',
     # 'vault/20250811_loss_utility/s191_l0.0001_oNone',
+
     # 'vault/20250811_loss_utility/s63_l0.001_oNone',
     # 'vault/20250811_loss_utility/s42_l0.001_oNone',
     # 'vault/20250811_loss_utility/s191_l0.001_oNone',
-    # 'vault/20250813_lr_utility/l0.003',
-    # 'vault/20250813_lr_sharpe/l0.0001',
+
+    # "vault/20250813_lr_utility/l0.002",
+    # "vault/20250813_lr_utility/l0.001",
+    # "vault/20250813_lr_utility/l0.0007",
+    # "vault/20250813_lr_utility/l0.0003",
+    "vault/20250813_lr_utility/l0.0001",
+    # "vault/20250813_lr_utility/l7e-05",
+
     # 'vault/20250813_lr_sharpe/l3e-05',
     # 'vault/20250813_lr_sharpe/l1e-05',
-    'vault/20250813_lr_sharpe/l8e-06',
+    # 'vault/20250813_lr_sharpe/l8e-06',
     # 'vault/20250813_lr_sharpe/l5e-06',
     # 'vault/20250813_lr_sharpe/l3e-06',
 ]
@@ -84,13 +92,15 @@ def plot_aggregated_losses(losses):
 # plot_aggregated_losses(ls)
 # plt.show()
 
+ax1 = plt.gca()
+ax2 = ax1.twinx()
+
 for s in all_snapshots:
     trains = []
     valids = []
     for e in s.trainer_state['epochs']:
         trains.append(e['train_loss'])
         valids.append(e['val_loss'])
-    plt.plot(trains, color='blue')
-    ax = plt.twinx()
-    ax.plot(valids, color='red')
+    ax1.plot(trains, color='blue')
+    ax2.plot(valids, color='red')
 plt.show()

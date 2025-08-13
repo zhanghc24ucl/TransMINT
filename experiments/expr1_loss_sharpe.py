@@ -1,4 +1,3 @@
-import copy
 import sys
 
 import torch
@@ -34,7 +33,7 @@ trainer_cfg = TrainerConfig(
     valid_loss_params=dict(output_steps=1),
     grad_clip_norm=1,
     device='cuda',
-    epochs=15,
+    epochs=20,
     early_stop_patience=0,
     seed=63,
 )
@@ -42,7 +41,7 @@ trainer_cfg = TrainerConfig(
 input_spec = build_input_spec(version)
 data_cfg = DataLoaderConfig(
     input_spec=input_spec,
-    batch_size = 64,
+    batch_size = 128,
     time_step = 180,  # 15 hours
 )
 
@@ -51,7 +50,6 @@ bt_cfg = BacktestConfig(
     data_cfg=data_cfg,
     trainer_cfg=trainer_cfg,
 )
-
 
 bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250813_loss_sharpe/s{seed}')
 bt.run()

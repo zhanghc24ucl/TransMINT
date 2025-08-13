@@ -1,16 +1,13 @@
 import copy
-import sys
 
 import torch
 
 from TransMINT.data_utils.datamodule import DataLoaderConfig
 from TransMINT.engine.backtest import Backtest, BacktestConfig
 from TransMINT.engine.trainer import TrainerConfig
-from TransMINT.model.loss import DecayedUtilityLoss, SharpeLoss, UtilityLoss
+from TransMINT.model.loss import DecayedUtilityLoss, SharpeLoss
 from TransMINT.model.transformer import MINTransformer
 from TransMINT.tasks.cn_futs.data import CNFutDataProvider, build_input_spec, load_data
-from TransMINT.tasks.cn_futs.settings import InSampleWindows
-
 
 version = 'v2'
 raw_data = load_data('../data', version=version)
