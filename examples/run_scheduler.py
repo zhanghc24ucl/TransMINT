@@ -1,5 +1,3 @@
-import sys
-
 import torch
 
 from TransMINT.data_utils.datamodule import DataLoaderConfig
@@ -8,9 +6,6 @@ from TransMINT.engine.trainer import TrainerConfig
 from TransMINT.model.loss import DecayedUtilityLoss, SharpeLoss
 from TransMINT.model.transformer import MINTransformer
 from TransMINT.tasks.cn_futs.data import CNFutDataProvider, build_input_spec, load_data
-from TransMINT.tasks.cn_futs.settings import InSampleWindows
-
-seed = int(sys.argv[1])
 
 version = 'v2'
 raw_data = load_data('../data', version=version)
@@ -31,9 +26,22 @@ trainer_cfg = TrainerConfig(
     loss_params=dict(risk_factor=0.1),
     valid_loss_class=SharpeLoss,
     valid_loss_params=dict(output_steps=1),
+    # scheduler_name='one_cycle',
+    # scheduler_params={
+    #     "max_lr": 0.0001,
+    #     "pct_start": 0.3,
+    #     "div_factor": 10.0,          # initial lr = 1e-5
+    #     "final_div_factor": 1000.,   #   final lr = 1e-7
+    #     "anneal_strategy": "cos",
+    # },
+    scheduler_name='warmup_cosine',
+    scheduler_params={
+        "warmup_pct": 0.1,
+        "min_lr_ratio": 1e-3,    # = 1 / final_div_factor
+    },
     grad_clip_norm=1,
     device='cuda',
-    epochs=20,
+    epochs=10,
     early_stop_patience=0,
     seed=63,
 )
@@ -46,10 +54,13 @@ data_cfg = DataLoaderConfig(
 )
 
 bt_cfg = BacktestConfig(
-    windows=InSampleWindows,
+    windows=[
+        ('2016-03-01', '2016-04-01', '2016-05-01', '2016-06-01'),
+    ],
     data_cfg=data_cfg,
     trainer_cfg=trainer_cfg,
 )
 
-bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250815_loss_utility/s{seed}')
+# bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250814_scheduler/warmup')
+bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250814_scheduler/warmup_ck')
 bt.run()

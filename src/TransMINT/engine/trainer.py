@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, List
 
 import torch
+from torch.optim.lr_scheduler import LambdaLR, OneCycleLR
 from tqdm import tqdm
 
 from ..data_utils.datamodule import NamedInputDataLoader
@@ -22,11 +23,16 @@ class TrainerConfig:
     valid_loss_class: Callable[..., torch.nn.Module] = torch.nn.MSELoss
     optimizer_class: Callable[..., torch.optim.Optimizer] = torch.optim.Adam
 
-    # ----- Component‑specific kwargs ---------------------------------------
+    # ----- Component‑specific kwargs ----------------------------------------
     model_params: Dict[str, Any] = field(default_factory=dict)
     loss_params: Dict[str, Any] = field(default_factory=dict)
     valid_loss_params: Dict[str, Any] = field(default_factory=dict)
     optimizer_params: Dict[str, Any] = field(default_factory=lambda: {"lr": 1e-3})
+
+    # ----- Scheduler --------------------------------------------------------
+    scheduler_name: Optional[str] = None
+    scheduler_params: Dict[str, Any] = field(default_factory=dict)
+    scheduler_step_on: str = "batch"  # can be either "batch" or "epoch"
 
     # ----- Runtime options --------------------------------------------------
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -52,6 +58,7 @@ class Snapshot:
     trainer_state: Dict[str, Any]
 
     best_model: Optional[Dict[str, torch.Tensor]] = None
+    scheduler_state: Optional[Dict[str, Any]] = None
 
 
 class Trainer:
@@ -75,11 +82,79 @@ class Trainer:
 
         self.model = None
         self.optimizer = None
+        self.scheduler = None
 
         self.criterion = cfg.loss_class(**cfg.loss_params).to(self.device)
         self.valid_loss = cfg.valid_loss_class(**cfg.valid_loss_params).to(self.device)
 
         self.snapshot: Optional[Snapshot] = None
+
+    def _steps_per_epoch(self) -> int:
+        try:
+            return len(self.train_loader)
+        except TypeError:
+            raise RuntimeError("train_loader must implement __len__ for scheduler usage.")
+
+    def _total_steps(self) -> int:
+        return self._steps_per_epoch() * self.cfg.epochs
+
+    def _current_lrs(self) -> List[float]:
+        if self.optimizer is None:
+            return []
+        return [pg["lr"] for pg in self.optimizer.param_groups]
+
+    def _build_onecycle_scheduler(self):
+        steps_per_epoch = self._steps_per_epoch()
+
+        return OneCycleLR(
+            self.optimizer,
+            epochs=self.cfg.epochs,
+            steps_per_epoch=steps_per_epoch,
+            **self.cfg.scheduler_params,
+        )
+
+    def _build_wm_cosine_scheduler(self):
+        """ Params:
+        * warmup_pct: float
+        * min_lr_ratio: float
+        """
+        from math import cos, pi
+
+        total_steps = self._total_steps()
+        params = self.cfg.scheduler_params
+        warmup_pct = params.get('warmup_pct', 0.1)
+        min_lr_ratio = params.get('min_lr_ratio', 1e-6)
+        warmup_steps = max(0, int(total_steps * warmup_pct))
+
+        def lr_lambda(step: int):
+            # linear warmup from 1/n_warmup_steps -> 1
+            if warmup_steps > 0 and step < warmup_steps:
+                return (step + 1.) / warmup_steps
+            # cosine decay 1 -> min_lr_ratio
+            t = (step - warmup_steps) / (total_steps - warmup_steps)
+            cosine = 0.5 * (1.0 + cos(pi * t))  # 1 -> 0
+            return min_lr_ratio + (1.0 - min_lr_ratio) * cosine
+
+        return LambdaLR(self.optimizer, lr_lambda=lr_lambda)
+
+    def _build_scheduler(self):
+        """Instantiate scheduler according to cfg. Must be called after optimizer creation."""
+        name = self.cfg.scheduler_name
+        if name is None:
+            self.scheduler = None
+            return
+
+        step_on = self.cfg.scheduler_step_on
+        if step_on not in ("batch", "epoch"):
+            raise ValueError("scheduler_step_on must be 'batch' or 'epoch'")
+
+        name = name.lower()
+        if name == 'one_cycle':
+            self.scheduler = self._build_onecycle_scheduler()
+        elif name == 'warmup_cosine':
+            self.scheduler = self._build_wm_cosine_scheduler()
+        else:
+            raise ValueError(f"Unknown scheduler name: {name}")
 
     def initialize(self, snapshot: Optional[Snapshot] = None):
         if snapshot is None:
@@ -93,11 +168,17 @@ class Trainer:
         self.optimizer = cfg.optimizer_class(
             self.model.parameters(), **cfg.optimizer_params
         )
+        self._build_scheduler()
 
         self.snapshot = snapshot
         set_random_state(snapshot.random_state)
         self.model.load_state_dict(snapshot.model_state)
         self.optimizer.load_state_dict(snapshot.optimizer_state)
+
+        if self.scheduler:
+            if snapshot.scheduler_state is None:
+                raise RuntimeError("No scheduler state found in snapshot")
+            self.scheduler.load_state_dict(snapshot.scheduler_state)
 
     def _init_snapshot(self):
         assert self.snapshot is None
@@ -108,12 +189,15 @@ class Trainer:
         self.optimizer = cfg.optimizer_class(
             self.model.parameters(), **cfg.optimizer_params
         )
+        self._build_scheduler()
 
         model_state = {
             k: v.detach().cpu().clone()
             for k, v in self.model.state_dict().items()
         }
         optimizer_state = copy.deepcopy(self.optimizer.state_dict())
+        scheduler_state = copy.deepcopy(self.scheduler.state_dict()) \
+            if self.scheduler else None
 
         from numpy import inf
         trainer_state = {
@@ -128,6 +212,7 @@ class Trainer:
             optimizer_state=optimizer_state,
             trainer_state=trainer_state,
             random_state=get_random_state(),
+            scheduler_state=scheduler_state,
         )
 
     def _train_step(self, batch) -> float:
@@ -145,6 +230,10 @@ class Trainer:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.grad_clip_norm)
 
         self.optimizer.step()
+
+        if self.scheduler and self.cfg.scheduler_step_on == 'batch':
+            self.scheduler.step()
+
         return loss.item()
 
 
@@ -171,6 +260,11 @@ class Trainer:
             self.model.load_state_dict(snapshot.model_state)
             self.optimizer.load_state_dict(snapshot.optimizer_state)
 
+            if self.scheduler:
+                if snapshot.scheduler_state is None:
+                    raise RuntimeError("No scheduler state found in snapshot")
+                self.scheduler.load_state_dict(snapshot.scheduler_state)
+
         epoch_pbar = tqdm(range(finished, n_epochs),
                           initial=finished, total=n_epochs,
                           desc="Epochs", position=0, leave=True)
@@ -190,17 +284,27 @@ class Trainer:
                     batch_pbar.set_postfix(train_loss=f'{running / cnt:.03e}', refresh=False)
             batch_pbar.close()
 
+            if self.scheduler and self.cfg.scheduler_step_on == "epoch":
+                self.scheduler.step()
+
             epoch_state['train_loss'] = train_loss = running / cnt
             if train_loss < trainer_state['best_train_loss']:
                 trainer_state['best_train_loss'] = train_loss
 
+            epoch_state['global_step'] = self._steps_per_epoch() * epoch
+            epoch_state['lrs'] = lrs = self._current_lrs()
+
             progress_messages = {'train_loss': f'{train_loss:.03e}/{trainer_state["best_train_loss"]:.03e}'}
+            if len(lrs) > 0:
+                progress_messages['lr0'] = f'{lrs[0]:.03e}'
 
             snapshot.model_state = {
                 k: v.detach().cpu().clone()
                 for k, v in self.model.state_dict().items()
             }
             snapshot.optimizer_state = copy.deepcopy(self.optimizer.state_dict())
+            if self.scheduler is not None:
+                snapshot.scheduler_state = copy.deepcopy(self.scheduler.state_dict())
 
             if self.valid_loader is not None:
                 eval_metrics = self.evaluate(self.valid_loader)
