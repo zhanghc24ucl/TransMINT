@@ -160,13 +160,53 @@ class BacktestRun:
         self.performance = None
 
         if store_path is None:
+            self.store_path = None
             self.snapshot_path = None
             self.result_path = None
         else:
             mkpath(f'{store_path}/')
+            self.store_path = store_path
             self.snapshot_path = f'{store_path}/trainer.pt'
             self.result_path = f'{store_path}/results.bin'
             self._load_results()
+
+    def _save_run_info(self, trainer_cfg, data_cfg, message: str):
+        if self.store_path is None:
+            return
+        # get time stamp as "2025_07_14_09_00_12_142301"
+        from datetime import datetime
+        time_stamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S_%f")
+
+        fn = f'{self.store_path}/run.{time_stamp}.json'
+
+        # Convert dataclasses to dict, and recursively handle class types
+        def serialize_obj(obj):
+            if isinstance(obj, type):
+                # Handle class types (e.g. <class 'TransMINT.model.transformer.MINTransformer'>)
+                return f"{obj.__module__}.{obj.__name__}"
+            elif hasattr(obj, '__class__') and hasattr(obj, '__dict__'):
+                # It's an instance of a class (e.g. dataclass)
+                result = {}
+                for k, v in obj.__dict__.items():
+                    result[k] = serialize_obj(v)
+                return result
+            elif isinstance(obj, (list, tuple)):
+                return [serialize_obj(item) for item in obj]
+            elif isinstance(obj, dict):
+                return {key: serialize_obj(value) for key, value in obj.items()}
+            else:
+                return obj
+
+        serialized_cfg = {
+            'message': message,
+            'trainer_cfg': serialize_obj(trainer_cfg),
+            'data_cfg': serialize_obj(data_cfg),
+        }
+
+        # write info as json
+        from json import dump
+        with open(fn, 'w', encoding='utf-8') as f:
+            dump(serialized_cfg, f, indent=4, ensure_ascii=False)
 
     def _save_snapshot(self, trainer):
         if self.snapshot_path is not None:
@@ -241,7 +281,13 @@ class BacktestRun:
         )
         snapshot = self._load_snapshot()
         if snapshot is not None:
-            print(f'resume from snapshot with {len(snapshot.trainer_state["epochs"])} epochs')
+            message = f'resume from snapshot with {len(snapshot.trainer_state["epochs"])} epochs'
+        else:
+            message = f'start from scratch'
+        print(message)
+
+        # record run info
+        self._save_run_info(run_config.trainer_cfg, run_config.data_cfg, message)
         m.initialize(snapshot)
         m.fit()
 
