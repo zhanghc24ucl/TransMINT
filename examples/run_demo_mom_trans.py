@@ -13,15 +13,15 @@ data_provider = MomTransDataProvider(r)
 trainer_cfg = TrainerConfig(
     model_class=MINTransformer,
     model_params=dict(
-        d_model=32,
+        d_model=16,
         num_heads=4,
         output_size=1,
         dropout=0.2,
         trainable_skip_add=False,
     ),
-    optimizer_class=torch.optim.Adam,
+    optimizer_class=torch.optim.AdamW,
     optimizer_params=dict(
-        lr=0.001,
+        lr=0.0001,
     ),
     loss_class=SharpeLoss,
     loss_params=dict(
@@ -54,7 +54,7 @@ bt_cfg = BacktestConfig(
         data_cfg=data_cfg,
         trainer_cfg=trainer_cfg,
 )
-bt = Backtest(bt_cfg, data_provider)
+bt = Backtest(bt_cfg, data_provider, store_path='experiments/demo_mom_trans')
 bt.run()
 perf = bt.performance()
 

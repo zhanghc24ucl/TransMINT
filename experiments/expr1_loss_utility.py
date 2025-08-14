@@ -51,5 +51,5 @@ bt_cfg = BacktestConfig(
     trainer_cfg=trainer_cfg,
 )
 
-bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250815_loss_utility/s{seed}')
+bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250813_loss_utility/s{seed}')
 bt.run()

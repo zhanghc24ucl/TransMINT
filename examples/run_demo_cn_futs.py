@@ -8,7 +8,7 @@ from TransMINT.engine.trainer import TrainerConfig
 from TransMINT.model.base import MinLinear
 from TransMINT.model.loss import SharpeLoss, UtilityLoss
 from TransMINT.model.lstm import MinFusionLSTM, MinLSTM
-from TransMINT.model.transformer import MINTransformer, FusionTransformer
+from TransMINT.model.transformer import FusionTransformer, MINTransformer
 from TransMINT.tasks.cn_futs.data import CNFutDataProvider, build_input_spec, load_data
 
 version = 'v2'
@@ -17,7 +17,7 @@ raw_data = load_data('../data', version=version)
 data_provider = CNFutDataProvider(raw_data)
 
 base_args = dict(
-    optimizer_class=torch.optim.Adam,
+    optimizer_class=torch.optim.AdamW,
     optimizer_params=dict(
         lr=0.001,
     ),
@@ -98,12 +98,12 @@ base_bt_cfg = BacktestConfig(
         data_cfg=data_cfg,
         trainer_cfg=trainer_cfg_lstm,
 )
-labels = ['MinTrans', 'FusionTrans']
-models = [trainer_cfg_trans, trainer_cfg_fusion_trans]
+labels = ['MinLinear', 'MinLSTM', 'FusionLSTM', 'FusionTrans', 'MINTransformer']
+models = [trainer_cfg_linear, trainer_cfg_lstm, trainer_cfg_lstm_fusion, trainer_cfg_fusion_trans, trainer_cfg_trans]
 
 for label, model in zip(labels, models):
     bt_cfg = copy.deepcopy(base_bt_cfg)
     bt_cfg.trainer_cfg = model
 
-    bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250812_fix/{label}')
+    bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/demo_cn_futs/{label}')
     bt.run()

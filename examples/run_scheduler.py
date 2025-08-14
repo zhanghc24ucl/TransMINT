@@ -37,7 +37,7 @@ trainer_cfg = TrainerConfig(
     scheduler_name='warmup_cosine',
     scheduler_params={
         "warmup_pct": 0.1,
-        "min_lr_ratio": 1e-3,    # = 1 / final_div_factor
+        "min_lr_ratio": 1e-3,
     },
     grad_clip_norm=1,
     device='cuda',
@@ -61,6 +61,8 @@ bt_cfg = BacktestConfig(
     trainer_cfg=trainer_cfg,
 )
 
-# bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250814_scheduler/warmup')
-bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/20250814_scheduler/warmup_ck')
+# bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/demo_scheduler/one_cycle')
+# bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/demo_scheduler/one_cycle_ck')
+# bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/demo_scheduler/warmup')
+bt = Backtest(bt_cfg, data_provider, store_path=f'experiments/demo_scheduler/warmup_ck')
 bt.run()

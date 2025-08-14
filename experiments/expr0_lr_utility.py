@@ -51,8 +51,8 @@ base_bt_cfg = BacktestConfig(
 )
 
 bts = []
-# for lr in [0.001, 0.002, 0.005, 0.01]:
-for lr in [0.0003, 0.0007]:
+#          100e-4, 50e-4, 40e-4, 30e-4, 20e-4, 10e-4, 7e-4  , 3e-4  , 1e-4* , 0.7e-4
+for lr in [0.01,   0.005, 0.004, 0.003, 0.002, 0.001, 0.0007, 0.0003, 0.0001, 0.00007]:
     bt_cfg = copy.deepcopy(base_bt_cfg)
     bt_cfg.trainer_cfg.optimizer_params['lr'] = lr
 
