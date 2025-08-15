@@ -5,7 +5,7 @@ import torch
 from TransMINT.data_utils.datamodule import DataLoaderConfig
 from TransMINT.engine.backtest import Backtest, BacktestConfig
 from TransMINT.engine.trainer import TrainerConfig
-from TransMINT.model.base import MinLinear
+from TransMINT.model.linear import MinLinear
 from TransMINT.model.loss import SharpeLoss, UtilityLoss
 from TransMINT.model.lstm import MinFusionLSTM, MinLSTM
 from TransMINT.model.transformer import FusionTransformer, MINTransformer

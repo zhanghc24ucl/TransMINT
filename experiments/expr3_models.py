@@ -5,7 +5,7 @@ import torch
 from TransMINT.data_utils.datamodule import DataLoaderConfig
 from TransMINT.engine.backtest import Backtest, BacktestConfig
 from TransMINT.engine.trainer import TrainerConfig
-from TransMINT.model.base import MinLinear
+from TransMINT.model.linear import MinLinear
 from TransMINT.model.loss import DecayedUtilityLoss, SharpeLoss
 from TransMINT.model.lstm import MinFusionLSTM, MinLSTM
 from TransMINT.model.transformer import FusionTransformer, MINTransformer
@@ -82,7 +82,9 @@ trainer_configs = {
     ),
     'MinLinear': TrainerConfig(
         model_class=MinLinear,
-        model_params=dict(),
+        model_params=dict(
+            d_model=16,
+        ),
         **base_args,
     ),
 }
