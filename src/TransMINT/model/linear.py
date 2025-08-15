@@ -1,81 +1,64 @@
-from typing import Optional
-
 import torch
-from torch import Tensor, nn
+import torch.nn as nn
+from torch import Tensor
 
 from .base import ModelBase
 from ..data_utils.spec import InputSpec
 
 
-# ----------------------- Diagonal-ARX(1) Linear RNN ----------------------- #
-class DiagLinearRNNCell(nn.Module):
-    """
-    h_t = diag(a) h_{t-1} + W_x x_t + b
-    where
-    * if rho is specified: a = rho * tanh(raw_a)
-    * if rho is None     : a = tanh(raw_a)
-    * rho must be within (0, 1), better to ~1.
-    """
-
-    def __init__(
-            self,
-            d_input: int,
-            d_hidden: int,
-            rho: Optional[float] = None,
-            init_a: float = 0.95
-    ) -> None:
+class LinearRNNCell(nn.Module):
+    def __init__(self, input_size, hidden_size, bias=True, activation=None):
         super().__init__()
-        self.d_input, self.d_hidden = d_input, d_hidden
-        self.rho = rho
+        self.ih = nn.Linear(input_size, hidden_size, bias=bias)
+        self.hh = nn.Linear(hidden_size, hidden_size, bias=False)
+        assert activation in ('tanh', 'relu', None)
+        self.activation = activation
 
-        # a_i for each channel
-        self.raw_a = nn.Parameter(torch.empty(d_hidden))
-        self.W_x = nn.Linear(d_input, d_hidden, bias=True)
-
-        # initialize a for a longer memory
-        init_a = float(max(min(init_a, 0.999), -0.999))
-        with torch.no_grad():
-            from math import atanh
-            self.raw_a.fill_(atanh(init_a))
-            nn.init.xavier_uniform_(self.W_x.weight)
-            nn.init.zeros_(self.W_x.bias)
-
-    def a_vector(self) -> Tensor:
-        a = torch.tanh(self.raw_a)  # keep a within (-1, 1)
-        if self.rho is not None:
-            a = a * self.rho
-        return a  # (d_hidden,)
-
-    def step(self, x_t: Tensor, h_prev: Tensor, a: Tensor) -> Tensor:
-        # x_t: (B, d_input), h_prev: (B, d_hidden), a: (d_hidden,)
-        return h_prev * a + self.W_x(x_t)
-
-    def forward(self, x: Tensor, h0: Optional[Tensor] = None) -> Tensor:
-        B, T, _ = x.shape
-        H = self.d_hidden
-
-        # 1) z_t = W_x x_t + b
-        z = self.W_x(x)  # (B, T, H)
-
-        a = self.a_vector()  # (H,)
-
-        # 2) p[t] = a^(t+1) -> cumprod([a, a^2, ...])
-        A = a.unsqueeze(0).expand(T, H)  # (T, H)
-        p = torch.cumprod(A, dim=0).unsqueeze(0)  # (1, T, H)
-
-        # 3) v_t = sum_{k<=t} z_k / p_k ；h = v * p
-        v = torch.cumsum(z / p.clamp_min(1e-12), dim=1)  # (B, T, H)
-        h = v * p  # (B, T, H)
-
-        # 4) h0 contribution: + a^(t+1) * h0
-        if h0 is not None:
-            h = h + p * h0.view(B, 1, H)
-
-        # 5) deal with |a|≈0: h_t ≈ z_t
-        zero_mask = (a.abs() < 1e-6).view(1, 1, H)  # (1,1,H)
-        h = torch.where(zero_mask, z, h)
-
+    def forward(self, x_t, h_prev=None):
+        if h_prev is None:
+            h_prev = x_t.new_zeros(x_t.size(0), self.hh.in_features)
+        h = self.ih(x_t) + self.hh(h_prev)
+        if self.activation == 'tanh':
+            h = torch.tanh(h)
+        elif self.activation == 'relu':
+            h = torch.relu(h)
+        # else: no activation
         return h
+
+
+def _linear_rnn(cell: LinearRNNCell, x, h0=None):  # x: (B,T,In)
+    B, T, _ = x.shape
+    h = h0
+    outs = []
+    for t in range(T):
+        h = cell(x[:, t, :], h)
+        outs.append(h)
+    return torch.stack(outs, dim=1), h  # (B,T,H), (B,H)
+
+
+"""
+# ---- PyTorch RNN ----
+inp, hid = 5, 7
+rnn = nn.RNN(inp, hid, num_layers=1, nonlinearity='tanh', bias=True, batch_first=True, dropout=0)
+
+# ---- Create cell and copy initial parameters from PyTroch RNN ----
+cell = LinearRNNCell(inp, hid, bias=True, activation='tanh')
+with torch.no_grad():
+    cell.ih.weight.copy_(rnn.weight_ih_l0)
+    cell.hh.weight.copy_(rnn.weight_hh_l0)
+    cell.ih.bias.copy_(rnn.bias_ih_l0 + rnn.bias_hh_l0)
+
+# ---- Comparison ----
+B, T = 3, 11
+x  = torch.randn(B, T, inp)
+h0 = torch.randn(1, B, hid)   # (num_layers * num_directions, B, H)
+
+y_ref, hn_ref = rnn(x, h0)            # y_ref: (B,T,H), hn_ref: (1,B,H)
+y_mine, hn_mine = linear_rnn(cell, x, h0.squeeze(0))
+
+print(torch.allclose(y_ref, y_mine, rtol=1e-6, atol=1e-6))   # True
+print(torch.allclose(hn_ref.squeeze(0), hn_mine, rtol=1e-6, atol=1e-6))  # True
+"""
 
 
 class MinLinear(ModelBase):
@@ -84,19 +67,16 @@ class MinLinear(ModelBase):
             input_spec: InputSpec,
             d_model: int,
             output_size: int = 1,
-            rho: Optional[float] = None,
     ):
         super().__init__(input_spec)
         n_features = input_spec.count(feature_class='observed')
         self.output_size = output_size
 
-        self.rnn_cell = DiagLinearRNNCell(n_features, d_model, rho)
+        self.rnn_cell = LinearRNNCell(n_features, d_model, activation=None)
         self.out_proj = nn.Linear(d_model, output_size)
         self.tanh = nn.Tanh()
 
     def forward(self, inputs) -> Tensor:
-        rnn_cell = self.rnn_cell
-
         x = self._observed_features(inputs)  # B, T, n_features
-        h_out = self.rnn_cell(x)
+        h_out, _ = _linear_rnn(self.rnn_cell, x)
         return self.tanh(self.out_proj(h_out))  # bound to [-1, 1]
