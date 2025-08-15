@@ -6,7 +6,7 @@ from TransMINT.data_utils.datamodule import DataLoaderConfig
 from TransMINT.engine.backtest import Backtest, BacktestConfig
 from TransMINT.engine.trainer import TrainerConfig
 from TransMINT.model.loss import DecayedUtilityLoss, SharpeLoss
-from TransMINT.model.lstm import MinFusionLSTM
+from TransMINT.model.lstm import FusionLSTM
 from TransMINT.model.transformer import FusionTransformer, MINTransformer
 from TransMINT.tasks.cn_futs.data import CNFutDataProvider, build_input_spec, load_data
 from TransMINT.tasks.cn_futs.settings import InSampleWindows
@@ -63,7 +63,7 @@ trainer_configs = {
         **base_args,
     ),
     'FusionLSTM': TrainerConfig(
-        model_class=MinFusionLSTM,
+        model_class=FusionLSTM,
         model_params=dict(
             d_model=16,
             dropout=0.2,
