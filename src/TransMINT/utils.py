@@ -101,3 +101,7 @@ def find_all(base_dirs, file_name) -> List[str]:
                 if file_path.is_file():
                     paths.append(str(file_path.resolve()))
     return sorted(paths)
+
+
+def decay_factor(half_life: int):
+    return 0.5 ** (1 / half_life)

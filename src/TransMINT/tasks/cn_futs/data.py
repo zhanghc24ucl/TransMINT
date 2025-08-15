@@ -6,11 +6,11 @@ from ...data_utils.datamodule import DataLoaderConfig, DataProvider, NamedInputD
 from ...data_utils.spec import FeatureSpec, InputSpec
 
 
-def build_input_spec(version='v1'):
+def build_input_spec(version='v1', **args):
     return {
         'v1': _build_input_spec_v1,
         'v2': _build_input_spec_v2,
-    }[version]()
+    }[version](**args)
 
 def _build_input_spec_v1():
     n_tickers = len(cn_futs.CN_FUTS_TICKERS_FULL)
@@ -27,13 +27,14 @@ def _build_input_spec_v1():
     return InputSpec(specs)
 
 
-def _build_input_spec_v2():
+def _build_input_spec_v2(selected=None):
     n_tickers = len(cn_futs.CN_FUTS_TICKERS_FULL)
     n_sectors = len(set(cn_futs.CN_FUTS_SECTORS.values()))
-    specs = [
+    static_specs = [
         FeatureSpec('ticker', 'static', 'categorical', category_size=n_tickers),
         FeatureSpec('sector', 'static', 'categorical', category_size=n_sectors),
-
+    ]
+    obs_specs = [
         FeatureSpec('norm_time_of_day',    'observed', 'real'),
         FeatureSpec('norm_ret_1m[0]',      'observed', 'real'),
         FeatureSpec('norm_ret_1m[1]',      'observed', 'real'),
@@ -54,7 +55,10 @@ def _build_input_spec_v2():
         FeatureSpec('macd_16_48_16_1m',    'observed', 'real'),
         FeatureSpec('macd_32_96_16_1m',    'observed', 'real'),
     ]
-    return InputSpec(specs)
+    specs = static_specs + obs_specs
+    if selected is None:
+        return InputSpec(specs)
+    return InputSpec([s for s in specs if s.name in selected])
 
 
 def load_data(data_dir, version='v1'):
