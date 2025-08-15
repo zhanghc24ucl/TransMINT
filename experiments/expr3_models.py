@@ -36,6 +36,7 @@ base_args = dict(
     grad_clip_norm=1,
     device='cuda',
     epochs=30,
+    min_epochs=25,
     early_stop_patience=5,
     seed=63,
 )

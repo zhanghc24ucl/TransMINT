@@ -36,10 +36,11 @@ class TrainerConfig:
 
     # ----- Runtime options --------------------------------------------------
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    epochs: int = 10
+    epochs: int = 30
+    min_epochs: int = 0
     grad_clip_norm: Optional[float] = None  # e.g. 1.0 for stable training
     best_min_delta: float = 1e-4
-    early_stop_patience: int = 25
+    early_stop_patience: int = 5
     seed: int = 42
 
 
@@ -248,6 +249,7 @@ class Trainer:
 
         patience = self.cfg.early_stop_patience
         best_min_delta = self.cfg.best_min_delta
+        min_epochs = self.cfg.min_epochs
         n_epochs = self.cfg.epochs
 
         # load start state
@@ -329,7 +331,7 @@ class Trainer:
 
             self._callback()
 
-            if 0 < patience <= trainer_state['wait_epochs']:
+            if 0 < patience <= trainer_state['wait_epochs'] and epoch >= min_epochs:
                 print(f"Early-Stopping triggered at epoch {epoch} "
                       f"(best val_loss={trainer_state['best_val_metric']:.4f})")
                 break
