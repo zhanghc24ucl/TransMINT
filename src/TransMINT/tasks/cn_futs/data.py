@@ -27,7 +27,7 @@ def _build_input_spec_v1():
     return InputSpec(specs)
 
 
-def _build_input_spec_v2(selected=None):
+def _build_input_spec_v2(include=None, exclude=None):
     n_tickers = len(cn_futs.CN_FUTS_TICKERS_FULL)
     n_sectors = len(set(cn_futs.CN_FUTS_SECTORS.values()))
     static_specs = [
@@ -56,9 +56,11 @@ def _build_input_spec_v2(selected=None):
         FeatureSpec('macd_32_96_16_1m',    'observed', 'real'),
     ]
     specs = static_specs + obs_specs
-    if selected is None:
-        return InputSpec(specs)
-    return InputSpec([s for s in specs if s.name in selected])
+    if include is not None:
+        specs = [s for s in specs if s.name in include]
+    if exclude is not None:
+        specs = [s for s in specs if s.name not in exclude]
+    return InputSpec(specs)
 
 
 def load_data(data_dir, version='v1'):
