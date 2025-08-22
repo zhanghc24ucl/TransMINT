@@ -1,9 +1,11 @@
+from typing import Optional
+
 import torch
 from torch import nn
 
 from .base import ModelBase
 from .embedding import InputEmbedding
-from .fusion import FusionLSTMModule, FusionVSN
+from .fusion import FusionLSTMModule, FusionVN, FusionVSN
 
 
 class MinLSTM(ModelBase):
@@ -43,21 +45,32 @@ class FusionLSTM(ModelBase):
             dropout: float = 0.,
             output_size: int = 1,
             trainable_skip_add: bool=False,
+            d_static: Optional[int] = None,
+            d_observed: Optional[int] = None,
+            is_lite: bool = False,
     ):
         super().__init__(input_spec)
         self.d_model = embed_dim = d_model
 
         # 1) Input embedding
-        self.input_embedding = embedding = InputEmbedding(input_spec, embed_dim)
+        self.input_embedding = embedding = InputEmbedding(
+            input_spec,
+            embed_dim,
+            static_dim=d_static,
+            observed_dim=d_observed,
+        )
 
         # 2) Variable selection
         n_static = embedding.n_features['static']
-        self.vsn = FusionVSN(
+        vsn_clz = FusionVN if is_lite else FusionVSN
+        self.vsn = vsn_clz(
             n_static,
             embedding.n_features['observed'],
             d_model,
             dropout,
             trainable_skip_add,
+            d_static=d_static,
+            d_observed=d_observed,
         )
 
         # 3) Fusion LSTM

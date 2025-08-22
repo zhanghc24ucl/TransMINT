@@ -1,4 +1,3 @@
-import copy
 import sys
 
 import torch
@@ -9,59 +8,66 @@ from TransMINT.engine.trainer import TrainerConfig
 from TransMINT.model.loss import DecayedUtilityLoss, SharpeLoss
 from TransMINT.model.transformer import MINTransformer
 from TransMINT.tasks.cn_futs.data import CNFutDataProvider, build_input_spec, load_data
+from TransMINT.tasks.cn_futs.settings import OutOfSampleWindows
+from TransMINT.utils import decay_factor
 
 seed = int(sys.argv[1])
+is_lite = len(sys.argv) > 2
+print(seed, 'is lite:', is_lite)
 
 version = 'v2'
 raw_data = load_data('../data', version=version)
 
 data_provider = CNFutDataProvider(raw_data)
 
-trainer_cfg = TrainerConfig(
-    model_class=MINTransformer,
-    model_params=dict(
-        d_model=16,
-        num_heads=4,
-        dropout=0.2,
-        trainable_skip_add=False,
-    ),
+base_args = dict(
     optimizer_class=torch.optim.AdamW,
-    optimizer_params=dict(lr=0.001),
+    optimizer_params=dict(lr=3e-4),
     loss_class=DecayedUtilityLoss,
-    loss_params=dict(risk_factor=0.1, expdecay_factor=None),
+    loss_params=dict(risk_factor=0.2, expdecay_factor=decay_factor(180)),
     valid_loss_class=SharpeLoss,
     valid_loss_params=dict(output_steps=1),
+    scheduler_name='warmup_cosine',
+    scheduler_params={
+        "warmup_pct": 0.10,
+        "min_lr_ratio": 0.05,
+    },
     grad_clip_norm=1,
     device='cuda',
-    epochs=20,
-    early_stop_patience=0,
+    epochs=30,
+    min_epochs=25,
+    early_stop_patience=5,
     seed=seed,
 )
 
+
+trainer_cfg = TrainerConfig(
+    model_class=MINTransformer,
+    model_params=dict(
+        d_model=32,
+        num_heads=4,
+        dropout=0.2,
+        is_lite=is_lite,
+    ),
+    **base_args,
+)
+
 input_spec = build_input_spec(version)
+
 data_cfg = DataLoaderConfig(
     input_spec=input_spec,
     batch_size = 128,
     time_step = 180,  # 15 hours
 )
 
-base_bt_cfg = BacktestConfig(
-    windows=[
-        # ('2016-07-01', '2019-01-01', '2019-07-01', '2020-01-01'),
-        ('2017-01-01', '2019-07-01', '2020-01-01', '2020-07-01'),
-    ],
+
+bt_cfg = BacktestConfig(
+    windows=OutOfSampleWindows,
     data_cfg=data_cfg,
     trainer_cfg=trainer_cfg,
 )
 
-bts = []
-#          7e-4  , 3e-4  , 1e-4* , 0.7e-4
-for lr in [0.0007, 0.0003, 0.0001, 0.00007]:
-    bt_cfg = copy.deepcopy(base_bt_cfg)
-    bt_cfg.trainer_cfg.optimizer_params['lr'] = lr
-
-    bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250815_lr_utility2/l{lr}_s{seed}')
-    bts.append(bt)
-
-for bt in bts:
-    bt.run()
+print(trainer_cfg)
+suffix = '_lite' if is_lite else ''
+bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250821_oos/s{seed}{suffix}')
+bt.run()

@@ -3,7 +3,8 @@ from typing import Optional, Tuple
 from torch import Tensor, nn
 
 from .base import causal_mask
-from .layer import GatedAddNorm, GatedResidualNetwork, InterpretableMultiHeadAttention, VariableSelectionNetwork
+from .layer import GatedAddNorm, GatedResidualNetwork, InterpretableMultiHeadAttention, VariableNetwork, \
+    VariableSelectionNetwork
 
 
 class FusionLSTMModule(nn.Module):
@@ -137,13 +138,15 @@ class FusionVSN(nn.Module):
             d_model: int,
             dropout: float,
             trainable_skip_add: bool = False,
+            d_static: Optional[int] = None,
+            d_observed: Optional[int] = None,
     ):
         super().__init__()
 
         if n_static > 0:
             self.vsn_static = VariableSelectionNetwork(
                 num_vars=n_static,
-                input_dim=d_model,
+                input_dim=d_static or d_model,
                 hidden_size=d_model,
                 dropout=dropout,
                 context_size=None,  # no context for static variables
@@ -162,7 +165,7 @@ class FusionVSN(nn.Module):
         assert n_observed > 0
         self.vsn_observed = VariableSelectionNetwork(
             num_vars=n_observed,
-            input_dim=d_model,
+            input_dim=d_observed or d_model,
             hidden_size=d_model,
             dropout=dropout,
             context_size=d_model,  # d_model context for observed variables
@@ -179,7 +182,65 @@ class FusionVSN(nn.Module):
             static_out, static_weights, c_varsel = None, None, None
         else:
             static_out, static_weights = self.vsn_static(embedded_static_input)  # [B, D]
-            c_varsel = self.static_ctx_varsel(static_out)                       # [B, D]
+            c_varsel = self.static_ctx_varsel(static_out)                        # [B, D]
 
         obs_out, obs_weights = self.vsn_observed(embedded_obs_input, c_varsel)
+        return obs_out, static_out
+
+
+class FusionVN(nn.Module):
+    def __init__(
+            self,
+            n_static: int,
+            n_observed: int,
+            d_model: int,
+            dropout: float,
+            trainable_skip_add: bool = False,
+            d_static: Optional[int] = None,
+            d_observed: Optional[int] = None,
+    ):
+        super().__init__()
+
+        if n_static > 0:
+            self.vn_static = VariableNetwork(
+                num_vars=n_static,
+                input_dim=d_static or d_model,
+                hidden_size=d_model,
+                dropout=dropout,
+                context_size=None,  # no context for static variables
+                trainable_skip_add=trainable_skip_add,
+            )
+            self.static_ctx = GatedResidualNetwork(
+                input_size=d_model,
+                hidden_size=d_model,
+                output_size=d_model,
+                dropout=dropout,
+            )
+        else:
+            self.vn_static = None
+            self.static_ctx = None
+
+        assert n_observed > 0
+        self.var_network = VariableNetwork(
+            num_vars=n_observed,
+            input_dim=d_observed or d_model,
+            hidden_size=d_model,
+            dropout=dropout,
+            context_size=d_model,
+            trainable_skip_add=trainable_skip_add,
+        )
+
+    def forward(
+            self,
+            embedded_obs_input: Tensor,
+            embedded_static_input: Optional[Tensor] = None
+    ) -> Tuple[Tensor, Optional[Tensor]]:
+        if embedded_static_input is None:
+            assert self.vn_static is None
+            static_out, c_static = None, None
+        else:
+            static_out = self.vn_static(embedded_static_input)  # [B, D]
+            c_static = self.static_ctx(static_out)              # [B, D]
+
+        obs_out = self.var_network(embedded_obs_input, c_static)
         return obs_out, static_out

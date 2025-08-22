@@ -246,10 +246,10 @@ class BacktestRun:
 
     def run(self):
         if self.results is not None:
-            print('Backtest has completed already.')
             return self.results
 
         run_config = self.config
+        print('Run backtest at', run_config.test_start)
         data_provider = self.data_provider
 
         if run_config.valid_start is None:

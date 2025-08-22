@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 
@@ -14,7 +16,11 @@ class FeatureEmbedding(nn.Module):
 
         if ftype == 'real':
             input_dim = feature_spec.lag_size or 1
-            self.embedding = nn.Linear(input_dim, d_model)
+            if d_model == 1:
+                # do nothing if embed_dim == 1 for real-value features
+                self.embedding = nn.Identity()
+            else:
+                self.embedding = nn.Linear(input_dim, d_model)
         elif ftype == 'categorical':
             self.embedding = nn.Embedding(feature_spec.category_size, d_model)
         elif ftype == 'cyclical' or ftype == 'sequential':
@@ -56,17 +62,29 @@ class FeatureEmbedding(nn.Module):
 
 
 class InputEmbedding(nn.Module):
-    def __init__(self, input_spec: InputSpec, embed_dim: int):
+    def __init__(
+            self,
+            input_spec: InputSpec,
+            embed_dim: int,
+            static_dim: Optional[int] = None,
+            time_dim: Optional[int] = None,
+            observed_dim: Optional[int] = None,
+    ):
         super().__init__()
-        self.embed_dim = embed_dim
 
         self.embeds = nn.ModuleDict()
         self.n_features = {}
 
+        embed_dims = {
+            'static': static_dim or embed_dim,
+            'time_pos': time_dim or embed_dim,
+            'observed': observed_dim or embed_dim,
+        }
+
         for clz in ['static', 'time_pos', 'observed']:
             features = input_spec.get(feature_class=clz)
             self.n_features[clz] = len(features)
-            self.embeds[clz] = nn.ModuleList([FeatureEmbedding(f, embed_dim) for f in features])
+            self.embeds[clz] = nn.ModuleList([FeatureEmbedding(f, embed_dims[clz]) for f in features])
 
     def _embed_group(self, inputs, embeds):
         if len(embeds) == 0:

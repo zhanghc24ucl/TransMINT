@@ -15,7 +15,7 @@ class ModelBase(nn.Module):
             if k.feature_class != 'observed':
                 continue
             obs.append(inputs[k.name].float())
-        return torch.cat(obs, dim=-1)  # (B, T, k)
+        return torch.cat(obs, dim=-1)  # (B, T, N)
 
 
 def causal_mask(T: int, device):

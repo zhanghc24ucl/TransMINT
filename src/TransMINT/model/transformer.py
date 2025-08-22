@@ -1,10 +1,11 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 
-from .base import ModelBase, causal_mask
+from .base import ModelBase
 from .embedding import InputEmbedding
-from .fusion import FusionDecoderModule, FusionLSTMModule, FusionVSN
-from .layer import GatedAddNorm, GatedResidualNetwork, InterpretableMultiHeadAttention, VariableSelectionNetwork
+from .fusion import FusionDecoderModule, FusionLSTMModule, FusionVN, FusionVSN
 from ..data_utils.spec import InputSpec
 
 
@@ -17,6 +18,9 @@ class FusionTransformer(ModelBase):
             output_size: int = 1,
             dropout: float = 0.1,
             trainable_skip_add: bool=False,
+            d_static: Optional[int] = None,
+            d_observed: Optional[int] = None,
+            is_lite: bool = False,
     ):
         super().__init__(input_spec)
         self.d_model = embed_dim = d_model
@@ -24,16 +28,24 @@ class FusionTransformer(ModelBase):
         self.output_size = output_size
 
         # 1) Input embedding
-        self.input_embedding = embedding = InputEmbedding(input_spec, embed_dim)
+        self.input_embedding = embedding = InputEmbedding(
+            input_spec,
+            embed_dim,
+            static_dim=d_static,
+            observed_dim=d_observed,
+        )
 
         # 2) Variable Selection Network
         n_static = embedding.n_features['static']
-        self.vsn = FusionVSN(
+        vsn_clz = FusionVN if is_lite else FusionVSN
+        self.vsn = vsn_clz(
             n_static=n_static,
             n_observed=embedding.n_features['observed'],
             d_model=d_model,
             dropout=dropout,
             trainable_skip_add=trainable_skip_add,
+            d_static=d_static,
+            d_observed=d_observed,
         )
 
         # 3) Decoder
@@ -72,6 +84,9 @@ class MINTransformer(ModelBase):
             output_size: int = 1,
             dropout: float = 0.1,
             trainable_skip_add: bool=False,
+            d_static: Optional[int] = None,
+            d_observed: Optional[int] = None,
+            is_lite: bool = False,
     ):
         super().__init__(input_spec)
         self.d_model = embed_dim = d_model
@@ -79,16 +94,24 @@ class MINTransformer(ModelBase):
         self.output_size = output_size
 
         # 1) Input embedding
-        self.input_embedding = embedding = InputEmbedding(input_spec, embed_dim)
+        self.input_embedding = embedding = InputEmbedding(
+            input_spec,
+            embed_dim,
+            static_dim=d_static,
+            observed_dim=d_observed,
+        )
 
         # 2) Variable Selection Network
         n_static = embedding.n_features['static']
-        self.vsn = FusionVSN(
+        vsn_clz = FusionVN if is_lite else FusionVSN
+        self.vsn = vsn_clz(
             n_static=n_static,
             n_observed=embedding.n_features['observed'],
             d_model=d_model,
             dropout=dropout,
             trainable_skip_add=trainable_skip_add,
+            d_static=d_static,
+            d_observed=d_observed,
         )
 
         # 3) LSTM

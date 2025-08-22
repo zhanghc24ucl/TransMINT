@@ -78,3 +78,4 @@ data/
 # Experiment cache
 examples/experiments/*
 experiments/vault/*
+notes/vault/*

@@ -12,7 +12,9 @@ from TransMINT.tasks.cn_futs.settings import InSampleWindows
 from TransMINT.utils import decay_factor
 
 mode = sys.argv[1]
-print(mode)
+seed = int(sys.argv[2])
+is_lite = len(sys.argv) > 3
+print(mode, seed, 'is lite:', is_lite)
 
 mode_candidates = {
     'k05_none': (0.05, None),
@@ -24,9 +26,6 @@ mode_candidates = {
     'k20_none': (0.2, None),
     'k20_180':  (0.2, 180),
     'k20_20':   (0.2, 20),
-    'k30_none': (0.3, None),
-    'k30_180':  (0.3, 180),
-    'k30_20':   (0.3, 20),
     'k50_none': (0.5, None),
     'k50_180':  (0.5, 180),
     'k50_20':   (0.5, 20),
@@ -47,9 +46,10 @@ trainer_cfg = TrainerConfig(
         num_heads=4,
         dropout=0.2,
         trainable_skip_add=False,
+        is_lite=is_lite,
     ),
     optimizer_class=torch.optim.AdamW,
-    optimizer_params=dict(lr=2e-4),
+    optimizer_params=dict(lr=3e-4),
     loss_class=DecayedUtilityLoss,
     loss_params=dict(risk_factor=loss_k, expdecay_factor=loss_decay),
     scheduler_name='warmup_cosine',
@@ -64,7 +64,7 @@ trainer_cfg = TrainerConfig(
     epochs=30,
     min_epochs=25,
     early_stop_patience=5,
-    seed=63,
+    seed=seed,
 )
 
 input_spec = build_input_spec(version)
@@ -81,5 +81,6 @@ bt_cfg = BacktestConfig(
 )
 
 print(mode, loss_hl, bt_cfg.trainer_cfg.loss_params)
-bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250815_decayloss/{mode}')
+suffix = '_lite' if is_lite else ''
+bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250820_loss_params/s{seed}_{mode}{suffix}')
 bt.run()

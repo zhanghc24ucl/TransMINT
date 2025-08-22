@@ -172,6 +172,15 @@ class GatedResidualNetwork(nn.Module):
         gated_output = self.glu_addnorm(hidden, skip)
         return gated_output
 
+
+def _broadcast_context(context: Tensor, repeat: int) -> Optional[Tensor]:
+    if context.dim() == 2:  # (B, C)
+        context = context.unsqueeze(1).expand(-1, repeat, -1)  # (B, repeat, C)
+    elif context.dim() == 3:  # (B, repeat, C)
+        assert context.size(-2) == repeat
+    return context  # (B, repeat, C)
+
+
 class VariableSelectionNetwork(nn.Module):
     def __init__(
         self,
@@ -215,48 +224,97 @@ class VariableSelectionNetwork(nn.Module):
         )
         self.softmax = nn.Softmax(dim=-1)
 
-    def _broadcast_context(self, context: Tensor, repeat: int) -> Optional[Tensor]:
-        if context.dim() == 2:  # (B, C)
-            context = context.unsqueeze(1).expand(-1, repeat, -1)  # (B, repeat, C)
-        elif context.dim() == 3:  # (B, repeat, C)
-            assert context.size(-2) == repeat
-        return context  # (B, repeat, C)
-
     def forward(
         self,
         embedding: Tensor,
         context: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Tensor]:
-        if embedding.dim() == 3:  # (B, N, D) – static
+        # B: batch_size, T: time_step
+        # N: num_features, K: embedding_dim, D: d_model
+        if embedding.dim() == 3:  # (B, N, K) – static
             # static features accept no context
             assert context is None, "Static embedding does not accept context"
-            B, N, D = embedding.shape
-        elif embedding.dim() == 4:  # (B, T, N, D) – temporal/known
-            B, T, N, D = embedding.shape
+            B, N, K = embedding.shape
+        elif embedding.dim() == 4:  # (B, T, N, K) – temporal/known
+            B, T, N, K = embedding.shape
             if context is not None:
                 # Handle context broadcasting if necessary
-                context = self._broadcast_context(context, repeat=T)
+                context = _broadcast_context(context, repeat=T)
         else:
             raise ValueError(
-                "embedding must have shape (B, N, D) or (B, T, N, D), got"
+                "embedding must have shape (B, N, K) or (B, T, N, K), got"
                 f" {embedding.shape}"
             )
 
-        flat = embedding.reshape(*embedding.shape[:-2], N * D)  # (..., N*D)
+        flat = embedding.reshape(*embedding.shape[:-2], N * K)  # (..., N * K)
         logits = self.flatten_grn(flat, context)                # (..., N)
         weights = self.softmax(logits)                          # (..., N)
 
         transformed_list: List[Tensor] = []
         for i in range(N):
-            var_emb = embedding[..., i, :]                      # (..., D)
-            trans = self.var_grns[i](var_emb)                   # (..., H)
-            transformed_list.append(trans.unsqueeze(-2))        # (..., 1, H)
+            var_emb = embedding[..., i, :]                      # (..., K)
+            trans = self.var_grns[i](var_emb)                   # (..., D)
+            transformed_list.append(trans.unsqueeze(-2))        # (..., 1, D)
 
-        transformed = torch.cat(transformed_list, dim=-2)       # (..., N, H)
-        combined = weights.unsqueeze(-1) * transformed          # (..., N, H)
-        outputs = combined.sum(dim=-2)                          # (..., H)
+        transformed = torch.cat(transformed_list, dim=-2)       # (..., N, D)
+        combined = weights.unsqueeze(-1) * transformed          # (..., N, D)
+        outputs = combined.sum(dim=-2)                          # (..., D)
 
         return outputs, weights
+
+
+class VariableNetwork(nn.Module):
+    def __init__(
+            self,
+            num_vars: int,
+            input_dim: int,
+            hidden_size: int,
+            dropout: float = 0.0,
+            context_size: Optional[int] = None,
+            trainable_skip_add: bool = False,
+    ):
+        super().__init__()
+
+        self.num_vars = num_vars
+        self.input_dim = input_dim
+        self.hidden_size = hidden_size
+        self.context_size = context_size
+
+        # GRN that transforms input to hidden size
+        self.flatten_grn = GatedResidualNetwork(
+            input_size=num_vars * input_dim,
+            hidden_size=hidden_size,
+            output_size=hidden_size,
+            dropout=dropout,
+            context_size=context_size,
+            trainable_skip_add=trainable_skip_add,
+        )
+
+    def forward(
+            self,
+            embedding: Tensor,
+            context: Optional[Tensor] = None,
+    ) -> Tuple[Tensor, Tensor]:
+        # B: batch_size, T: time_step
+        # N: num_features, K: embedding_dim, D: d_model
+        if embedding.dim() == 3:  # (B, N, K) – static
+            # static features accept no context
+            assert context is None, "Static embedding does not accept context"
+            B, N, K = embedding.shape
+        elif embedding.dim() == 4:  # (B, T, N, K) – temporal/known
+            B, T, N, K = embedding.shape
+            if context is not None:
+                # Handle context broadcasting if necessary
+                context = _broadcast_context(context, repeat=T)
+        else:
+            raise ValueError(
+                "embedding must have shape (B, N, K) or (B, T, N, K), got"
+                f" {embedding.shape}"
+            )
+
+        flat = embedding.reshape(*embedding.shape[:-2], N * K)  # (..., N * K)
+        return self.flatten_grn(flat, context)  # (..., D)
+
 
 class ScaledDotProductAttention(nn.Module):
     def __init__(self, dropout: float = 0.0, mask_bias=float('-inf')):

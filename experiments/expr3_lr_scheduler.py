@@ -12,11 +12,12 @@ from TransMINT.tasks.cn_futs.settings import InSampleWindows
 
 seed = int(sys.argv[1])
 choice = sys.argv[2]
+is_lite = len(sys.argv) > 3
 
 choices = {
     'no':    (0.0001, None, None),
-    'wc1lr': (0.0001, 0.05, 0.05),
-    'wc2lr': (0.0002, 0.10, 0.05),
+    'w1': (0.0001, 0.05, 0.05),
+    'w3': (0.0003, 0.10, 0.05),
 }
 lr, pct, min_lr_ratio = choices[choice]
 
@@ -43,6 +44,7 @@ trainer_cfg = TrainerConfig(
         num_heads=4,
         dropout=0.2,
         trainable_skip_add=False,
+        is_lite=is_lite,
     ),
     optimizer_class=torch.optim.AdamW,
     optimizer_params=dict(lr=lr),
@@ -71,7 +73,7 @@ bt_cfg = BacktestConfig(
     trainer_cfg=trainer_cfg,
 )
 
-
+suffix = '_lite' if is_lite else ''
 print(bt_cfg.trainer_cfg.scheduler_name, bt_cfg.trainer_cfg.scheduler_params)
-bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250814_scheduler/s{seed}_{choice}')
+bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250819_scheduler/s{seed}_{choice}{suffix}')
 bt.run()
