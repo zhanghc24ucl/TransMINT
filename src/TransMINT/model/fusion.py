@@ -101,7 +101,7 @@ class FusionDecoderModule(nn.Module):
         )
         self.decoder_gate_addnorm = GatedAddNorm(
             input_size=d_model,
-            dropout=dropout,
+            dropout=0.0,  # shut down dropout for decoder output
             trainable_add=False
         )
 
