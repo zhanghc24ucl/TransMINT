@@ -17,6 +17,11 @@ class ModelBase(nn.Module):
             obs.append(inputs[k.name].float())
         return torch.cat(obs, dim=-1)  # (B, T, N)
 
+    def n_parameters(self):
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        non_trainable_params = sum(p.numel() for p in self.parameters() if not p.requires_grad)
+        return trainable_params, non_trainable_params
+
 
 def causal_mask(T: int, device):
     """
@@ -29,7 +34,7 @@ def causal_mask(T: int, device):
 
     For query time i and key time j, we mask j > i (future positions):
 
-        i\j    0      1      2
+        i,j    0      1      2
         0    False   True   True
         1    False  False   True
         2    False  False  False

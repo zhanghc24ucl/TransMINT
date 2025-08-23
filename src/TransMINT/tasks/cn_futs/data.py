@@ -12,6 +12,16 @@ def build_input_spec(version='v1', **args):
         'v2': _build_input_spec_v2,
     }[version](**args)
 
+
+def random_spec(n_static, n_observed):
+    specs = []
+    for n in range(n_static):
+        specs.append(FeatureSpec(f'static{n}', 'static', 'categorical', category_size=20))
+    for n in range(n_observed):
+        specs.append(FeatureSpec(f'observed{n}', 'observed', 'real'))
+    return InputSpec(specs)
+
+
 def _build_input_spec_v1():
     n_tickers = len(cn_futs.CN_FUTS_TICKERS_FULL)
     n_sectors = len(set(cn_futs.CN_FUTS_SECTORS.values()))
