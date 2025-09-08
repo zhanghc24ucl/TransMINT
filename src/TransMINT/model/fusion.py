@@ -109,7 +109,7 @@ class FusionDecoderModule(nn.Module):
             self,
             obs_input: Tensor,
             static_input: Optional[Tensor] = None
-    ) -> Tensor:
+    ) -> Tuple[Tensor, Tensor]:
         B, T, D = obs_input.shape
         device = obs_input.device
 
@@ -126,7 +126,7 @@ class FusionDecoderModule(nn.Module):
         attn_out = self.attn_gate_addnorm(attn_out, enriched)
         dec = self.post_grn(attn_out)
 
-        return self.decoder_gate_addnorm(dec, obs_input)
+        return self.decoder_gate_addnorm(dec, obs_input), attn_maps
 
 
 

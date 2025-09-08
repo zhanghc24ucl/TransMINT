@@ -93,6 +93,15 @@ class DailyPerformance:
         return annual_return
 
     @property
+    def max_drawdown(self):
+        ret = self.returns
+        from numpy import concatenate, cumprod, maximum, max
+        cum_value = concatenate([[1.0], cumprod(1 + ret)])
+        running_max = maximum.accumulate(cum_value)
+        drawdown = (running_max - cum_value) / running_max
+        return max(drawdown)
+
+    @property
     def turnover(self):
         from numpy import mean
         return mean(self.volumes)

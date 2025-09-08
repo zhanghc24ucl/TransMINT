@@ -12,6 +12,8 @@ def plot_heatmap(matrix, labels, *, title="Heatmap", figsize=(10, 8), cmap="RdYl
                           annot=annot,
                           fmt='.2f',
                           square=True,
+                          vmin=-1.0,
+                          vmax=1.0,
                           cbar_kws={"shrink": .8})
 
     plt.title(title)
@@ -27,10 +29,10 @@ def plot_feature_distribution(
     n_row = (N + n_column - 1) // n_column
     fig, axs = plt.subplots(n_row, n_column, figsize=figsize)
     for i, (key, ax) in enumerate(zip(feature_keys, axs.flatten())):
-        ax.hist(feature_data[key], bins=100, histtype='step')
+        ax.hist(feature_data[key], bins=100, histtype='step', density=True)
         ax.set_title(key, pad=10)
-    fig.suptitle(title)
     plt.subplots_adjust(hspace=0.5)
+    plt.tight_layout()
     return fig
 
 

@@ -12,8 +12,33 @@ from TransMINT.tasks.cn_futs.settings import OutOfSampleWindows
 from TransMINT.utils import decay_factor
 
 seed = int(sys.argv[1])
-is_lite = len(sys.argv) > 2
-print(seed, 'is lite:', is_lite)
+arch = sys.argv[2]
+loss = sys.argv[3]
+print(f'seed={seed}, arch={arch}, loss={loss}')
+
+is_lite = arch == 'lite'
+loss_args = {
+    's': dict(
+        optimizer_params=dict(lr=5e-6),
+        loss_class=SharpeLoss,
+        loss_params=dict(),
+        scheduler_name='warmup_cosine',
+        scheduler_params={
+            "warmup_pct": 0.10,
+            "min_lr_ratio": 0.05,
+        },
+    ),
+    'u': dict(
+        optimizer_params=dict(lr=3e-4),
+        loss_class=DecayedUtilityLoss,
+        loss_params=dict(risk_factor=0.2, expdecay_factor=decay_factor(180)),
+        scheduler_name='warmup_cosine',
+        scheduler_params={
+            "warmup_pct": 0.10,
+            "min_lr_ratio": 0.05,
+        },
+    ),
+}[loss]
 
 version = 'v2'
 raw_data = load_data('../data', version=version)
@@ -22,22 +47,15 @@ data_provider = CNFutDataProvider(raw_data)
 
 base_args = dict(
     optimizer_class=torch.optim.AdamW,
-    optimizer_params=dict(lr=3e-4),
-    loss_class=DecayedUtilityLoss,
-    loss_params=dict(risk_factor=0.2, expdecay_factor=decay_factor(180)),
     valid_loss_class=SharpeLoss,
     valid_loss_params=dict(output_steps=1),
-    scheduler_name='warmup_cosine',
-    scheduler_params={
-        "warmup_pct": 0.10,
-        "min_lr_ratio": 0.05,
-    },
     grad_clip_norm=1,
     device='cuda',
     epochs=30,
     min_epochs=25,
     early_stop_patience=5,
     seed=seed,
+    **loss_args,
 )
 
 
@@ -56,7 +74,7 @@ input_spec = build_input_spec(version)
 
 data_cfg = DataLoaderConfig(
     input_spec=input_spec,
-    batch_size = 128,
+    batch_size = 256,
     time_step = 180,  # 15 hours
 )
 
@@ -68,6 +86,5 @@ bt_cfg = BacktestConfig(
 )
 
 print(trainer_cfg)
-suffix = '_lite' if is_lite else ''
-bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250821_oos/s{seed}{suffix}')
+bt = Backtest(bt_cfg, data_provider, store_path=f'vault/20250829_b256_oos/s{seed}_{arch}_{loss}')
 bt.run()

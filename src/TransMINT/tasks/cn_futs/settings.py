@@ -70,6 +70,57 @@ CN_FUTS_TICKERS_SMALL = [
 ]
 
 
+CN_FUTS_TICKER_NAME = {
+    # stock index futures
+    'IC': 'CSI500',
+    'IF': 'CSI300',
+    'IH': 'SSE50',
+    # precise metals
+    'AG': 'Silver',
+    'AU': 'Gold',
+    # non-ferrous metals
+    'AL': 'Aluminum',
+    'CU': 'Copper',
+    'ZN': 'Zinc',
+    'SN': 'Tin',
+    'NI': 'Nickel',
+    'PB': 'Lead',
+
+    # black commodities & building materials
+    'HC': 'Hot-Rolled Coil',
+    'RB': 'Rebar',
+    'JC': 'Coke',
+    'JM': 'Coking Coal',
+    'IO': 'Iron Ore',
+    'FG': 'Float Glass',
+
+    # energy & chemicals
+    'ME': 'Methanol',
+    'BU': 'Bitumen',
+    'RU': 'Rubber',
+    'LP': 'Polyethylene',
+    'PP': 'Polypropylene',
+    'PV': 'PVC',
+    'TA': 'PTA',
+
+    # Agricultural
+    'CN': 'Corn',
+    'CS': 'Corn Starch',
+    'HA': 'Soybean',
+
+    'HY': 'Soybean Oil',
+    'RO': 'Rapeseed Oil',
+    'PO': 'Palm Oil',
+
+    'HM': 'Soybean Meal',
+    'RM': 'Rapeseed Meal',
+
+    'JD': 'Egg',
+    'SR': 'White Sugar',
+    'CF': 'Cotton',
+}
+
+
 CN_FUTS_SECTORS = {
     # stock index futures
     'IC': 'Finance',  # CSI 500 Index Futures
@@ -109,13 +160,13 @@ CN_FUTS_SECTORS = {
     'CN': 'Grains',  # Corn
     'CS': 'Grains',  # Corn Starch
 
-    'HA': 'Oilseeds',  # Soybean
-    'HY': 'Oilseeds',  # Soybean Oil
-    'RO': 'Oilseeds',  # Rapeseed Oil
-    'PO': 'Oilseeds',  # Palm Oil
+    'HA': 'OilSeeds',  # Soybean
+    'HY': 'OilSeeds',  # Soybean Oil
+    'RO': 'OilSeeds',  # Rapeseed Oil
+    'PO': 'OilSeeds',  # Palm Oil
 
-    'HM': 'Feedstuff',  # Soybean Meal
-    'RM': 'Feedstuff',  # Rapeseed Meal
+    'HM': 'FeedStuff',  # Soybean Meal
+    'RM': 'FeedStuff',  # Rapeseed Meal
 
     'JD': 'Softs',  # Egg
     'SR': 'Softs',  # White Sugar

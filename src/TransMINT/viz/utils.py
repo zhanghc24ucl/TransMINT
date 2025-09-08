@@ -48,3 +48,11 @@ def load_results(store_path, windows):
     bt.run()
 
     return bt.performance(), bt.results, bt.ticker_performance()
+
+
+def load_trained_model(store_path, model_class, input_spec, model_params):
+    model = model_class(input_spec, **model_params)
+    snapshot = load_all_trainer_snapshots([store_path])[0]
+    assert snapshot.trainer_state['completed']
+    model.load_state_dict(snapshot.best_model)
+    return model

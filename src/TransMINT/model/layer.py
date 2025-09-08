@@ -381,14 +381,15 @@ class InterpretableMultiHeadAttention(nn.Module):
             heads.append(head_dropout)
             attns.append(attn)
 
-        head = torch.stack(heads, dim=2) if self.n_head > 1 else heads[0]
-        attn = torch.stack(attns, dim=2)
-
         # take the average of all heads as output
-        outputs = torch.mean(head, dim=2) if self.n_head > 1 else head
+        head = torch.stack(heads, dim=1)  # [B, H, T, D]
+        outputs = head.mean(dim=1)  # [B, T, D]
+
         outputs = self.w_o(outputs)
         outputs = self.dropout(outputs)
-        return outputs, attn  # (H, B, T, T)
+
+        attn = torch.stack(attns, dim=1)  # (B, H, T, T)
+        return outputs, attn
 
 
 class PositionalEncoder(nn.Module):

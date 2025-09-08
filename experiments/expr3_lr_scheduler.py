@@ -15,7 +15,8 @@ choice = sys.argv[2]
 is_lite = len(sys.argv) > 3
 
 choices = {
-    'no':    (0.0001, None, None),
+    'no':  (0.0001, None, None),
+    'no3': (0.0003, None, None),
     'w1': (0.0001, 0.05, 0.05),
     'w3': (0.0003, 0.10, 0.05),
 }

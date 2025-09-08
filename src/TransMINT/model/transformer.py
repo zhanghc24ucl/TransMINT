@@ -60,6 +60,8 @@ class FusionTransformer(ModelBase):
         self.out_proj = nn.Linear(d_model, output_size)
         self.tanh = nn.Tanh()
 
+        self.attn_map = None
+
     def forward(self, inputs) -> torch.Tensor:
         # ---- 0. input embedding ----
         # FIXME: currently do not process time_pos embedding
@@ -69,7 +71,8 @@ class FusionTransformer(ModelBase):
         obs_out, static_out = self.vsn(obs_embed, static_embed)
 
         # ---- 2. Decoder self-attention ----
-        dec_out = self.decoder(obs_out, static_out)
+        dec_out, attn_map = self.decoder(obs_out, static_out)
+        self.attn_map = attn_map
 
         # ---- 3. Output ----
         return self.tanh(self.out_proj(dec_out))  # [B, T, output_size]
@@ -133,6 +136,8 @@ class MINTransformer(ModelBase):
         self.out_proj = nn.Linear(d_model, output_size)
         self.tanh = nn.Tanh()
 
+        self.attn_map = None
+
     def forward(self, inputs) -> torch.Tensor:
         # ---- 0. input embedding ----
         # FIXME: currently do not process time_pos embedding
@@ -145,7 +150,8 @@ class MINTransformer(ModelBase):
         lstm_out = self.lstm(obs_out, static_out)
 
         # ---- 3. Decoder self-attention ----
-        dec_out = self.decoder(lstm_out, static_out)
+        dec_out, attn_map = self.decoder(lstm_out, static_out)
 
+        self.attn_map = attn_map
         # ---- 4. Output ----
         return self.tanh(self.out_proj(dec_out))  # [B, T, output_size]
